@@ -6,7 +6,7 @@ library apple_maps_flutter;
 
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -33,3 +33,4 @@ part 'src/polygon.dart';
 part 'src/polygon_updates.dart';
 part 'src/ui.dart';
 part 'src/snapshot_options.dart';
+part 'src/widget_marker.dart';
