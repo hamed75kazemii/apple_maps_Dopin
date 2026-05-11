@@ -94,6 +94,32 @@ class _PageState extends State<Page> {
 
 - **`anchor`**: نقطهٔ تصویر که روی مختصات جغرافیایی می‌نشیند؛ برای مارکر پایه‌دار معمولاً `Offset(0.5, 1.0)` (وسط پایین) مناسب است.
 
+## هالهٔ متحرک پشت مارکر سفارشی (`glow`) — فقط iOS
+
+برای مارکر **سفارشی** (آیکن از بایت یا asset، مثلاً خروجی `WidgetMarker`) می‌توانید **`glow: true`** بگذارید. تا وقتی **`glow` روشن بماند**، در native یک حلقهٔ **پالس کامل** اجرا می‌شود: هر بار هاله از مرکز **بزرگ می‌شود و محو می‌شود** (`easeOut`)، سپس بلافاصله چرخهٔ بعدی شروع می‌شود؛ **تعداد پالس از سمت Dart ست نمی‌شود**. انیمیشن فقط وقتی دوباره از نو ساخته می‌شود که **رنگ یا شدت** (`glowColor` / `glowIntensity`) عوض شود، نه با هر بار `layout`، تا وسط یک پالس قطع نشود.
+
+فیلدها:
+
+| فیلد | پیش‌فرض | توضیح |
+|------|---------|--------|
+| `glow` | `false` | فعال‌سازی هالهٔ تکرارشونده |
+| `glowColor` | `Color(0xFFEC30E4)` | رنگ ARGB؛ کانال آلفای رنگ در شدت کلی ضرب می‌شود |
+| `glowIntensity` | `1.0` | بین `0` و `1`؛ شدت اوج شفافیت و بُرد scale و کمی طول هر پالس |
+
+```dart
+Annotation(
+  annotationId: AnnotationId('me'),
+  position: userLatLng,
+  icon: myBitmapDescriptor,
+  anchor: const Offset(0.5, 0.5),
+  glow: true,
+  glowColor: const Color(0xFFFF6B35),
+  glowIntensity: 0.85,
+)
+```
+
+نمونهٔ اجرایی: `consumer_sample/lib/main.dart`.
+
 ## نکات عملی
 
 1. **اندازه (`logicalSize`)**  

@@ -102,7 +102,7 @@ class InfoWindow {
 /// This does not have to be globally unique, only unique among the list.
 @immutable
 class AnnotationId {
-  AnnotationId(this.value);
+  const AnnotationId(this.value);
 
   /// value of the [AnnotationId].
   final String value;
@@ -155,7 +155,11 @@ class Annotation {
     this.visible = true,
     this.zIndex = -1,
     this.onDragEnd,
-  }) : assert(0.0 <= alpha && alpha <= 1.0);
+    this.glow = false,
+    this.glowColor = const Color(0xFFEC30E4),
+    this.glowIntensity = 1.0,
+  }) : assert(0.0 <= alpha && alpha <= 1.0),
+        assert(0.0 <= glowIntensity && glowIntensity <= 1.0);
 
   /// Uniquely identifies a [Annotation].
   final AnnotationId annotationId;
@@ -201,6 +205,16 @@ class Annotation {
   /// earlier, and thus appearing to be closer to the surface of the Earth.
   double zIndex;
 
+  /// When true (iOS, custom [BitmapDescriptor] only), draws a glow ring that **loops**
+  /// full outward pulses (expand + fade) while [glow] stays true—no fixed pulse count.
+  final bool glow;
+
+  /// ARGB color for the glow; alpha is multiplied with [glowIntensity] on the native side.
+  final Color glowColor;
+
+  /// Strength of the effect in `0.0`…`1.0` (peak opacity and scale reach).
+  final double glowIntensity;
+
   /// Creates a new [Annotation] object whose values are the same as this instance,
   /// unless overwritten by the specified parameters.
   Annotation copyWith({
@@ -215,6 +229,9 @@ class Annotation {
     double? zIndexParam,
     VoidCallback? onTapParam,
     ValueChanged<LatLng>? onDragEndParam,
+    bool? glowParam,
+    Color? glowColorParam,
+    double? glowIntensityParam,
   }) {
     return Annotation(
       annotationId: annotationId,
@@ -228,6 +245,9 @@ class Annotation {
       visible: visibleParam ?? visible,
       zIndex: zIndexParam ?? zIndex,
       onDragEnd: onDragEndParam ?? onDragEnd,
+      glow: glowParam ?? glow,
+      glowColor: glowColorParam ?? glowColor,
+      glowIntensity: glowIntensityParam ?? glowIntensity,
     );
   }
 
@@ -249,6 +269,11 @@ class Annotation {
     addIfPresent('visible', visible);
     addIfPresent('position', position._toJson());
     addIfPresent('zIndex', zIndex);
+    json['glow'] = glow;
+    if (glow) {
+      json['glowColor'] = glowColor.value;
+      json['glowIntensity'] = glowIntensity;
+    }
     return json;
   }
 
@@ -265,11 +290,27 @@ class Annotation {
         infoWindow == typedOther.infoWindow &&
         position == typedOther.position &&
         visible == typedOther.visible &&
-        zIndex == typedOther.zIndex;
+        zIndex == typedOther.zIndex &&
+        glow == typedOther.glow &&
+        glowColor == typedOther.glowColor &&
+        glowIntensity == typedOther.glowIntensity;
   }
 
   @override
-  int get hashCode => annotationId.hashCode;
+  int get hashCode => Object.hash(
+        annotationId,
+        alpha,
+        anchor,
+        draggable,
+        icon,
+        infoWindow,
+        position,
+        visible,
+        zIndex,
+        glow,
+        glowColor,
+        glowIntensity,
+      );
 
   @override
   String toString() {

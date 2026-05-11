@@ -44,7 +44,7 @@ extension AppleMapController: AnnotationDelegate {
         let identifier: String = annotation.id
         var annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
         let oldflutterAnnoation = annotationView?.annotation as? FlutterAnnotation
-        if annotationView == nil || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType {
+        if annotationView == nil || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType || oldflutterAnnoation?.glow != annotation.glow {
             if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
                 annotationView = getMarkerAnnotationView(annotation: annotation, id: identifier)
             } else if annotation.icon.iconType == .CUSTOM_FROM_ASSET || annotation.icon.iconType == .CUSTOM_FROM_BYTES {
@@ -268,11 +268,18 @@ extension AppleMapController: AnnotationDelegate {
 
     private func getCustomAnnotationView(annotation: FlutterAnnotation, id: String) -> FlutterAnnotationView {
         let annotationView: FlutterAnnotationView
+        let useGlow = annotation.glow
         if #available(iOS 11.0, *) {
-            self.mapView.register(FlutterAnnotationView.self, forAnnotationViewWithReuseIdentifier: id)
+            if useGlow {
+                self.mapView.register(GlowFlutterAnnotationView.self, forAnnotationViewWithReuseIdentifier: id)
+            } else {
+                self.mapView.register(FlutterAnnotationView.self, forAnnotationViewWithReuseIdentifier: id)
+            }
             annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: id, for: annotation) as! FlutterAnnotationView
         } else {
-            annotationView = FlutterAnnotationView(annotation: annotation, reuseIdentifier: id)
+            annotationView = useGlow
+                ? GlowFlutterAnnotationView(annotation: annotation, reuseIdentifier: id)
+                : FlutterAnnotationView(annotation: annotation, reuseIdentifier: id)
         }
         annotationView.image = annotation.icon.image
         annotationView.stickyZPosition = annotation.zIndex

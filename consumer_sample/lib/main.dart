@@ -4,10 +4,6 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 
-/// اپ نمونه برای تست فورک `apple_maps_flutter`.
-///
-/// اجرا: از پوشه‌ی `consumer_sample` دستور `flutter run` (ترجیحاً روی iOS؛
-/// این پلاگین فقط پلتفرم iOS را ثبت کرده است).
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const AppleMapsConsumerApp());
@@ -49,14 +45,11 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   /// هر ویجتی که اینجا برمی‌گردد به PNG تبدیل می‌شود و روی نقشه به‌عنوان مارکر دیده می‌شود.
   Widget _customMarkerWidget() {
     return Container(
-      width: 100,
-      height: 100,
+      width: 20,
+      height: 20,
 
       // padding: EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.red.withOpacity(0.5),
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.purple),
     );
   }
 
@@ -75,13 +68,14 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       final BitmapDescriptor icon = await WidgetMarker.toBitmapDescriptor(
         context,
         marker: _customMarkerWidget(),
-        logicalSize: const Size(200, 48),
+        logicalSize: const Size(50, 50),
         pixelRatio: MediaQuery.devicePixelRatioOf(context).clamp(1.0, 4.0),
       );
       if (mounted) {
         setState(() {
           _widgetMarkerIcon = icon;
-          _status = 'نقشه + مارکر ویجتی آماده است.';
+          _status =
+              'نقشه + مارکر ویجتی با هالهٔ تکرارشونده تا وقتی glow روشن است.';
         });
       }
     } catch (e) {
@@ -148,10 +142,13 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
                   ? null
                   : <Annotation>{
                       Annotation(
-                        annotationId: AnnotationId('widget_marker'),
+                        annotationId: const AnnotationId('widget_marker'),
                         position: _tehran.target,
                         icon: _widgetMarkerIcon!,
-                        anchor: const Offset(0.5, 1.0),
+                        anchor: const Offset(0.5, 0.5),
+                        glow: true,
+                        glowColor: const Color(0xFFEC30E4),
+                        glowIntensity: 1,
                       ),
                     },
               onTap: (LatLng point) {
