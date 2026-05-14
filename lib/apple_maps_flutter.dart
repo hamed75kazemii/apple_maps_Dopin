@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 part 'src/annotation.dart';
 part 'src/annotation_updates.dart';
 part 'src/apple_map.dart';
+part 'src/apple_poi_detail.dart';
 part 'src/bitmap.dart';
 part 'src/cap.dart';
 part 'src/callbacks.dart';

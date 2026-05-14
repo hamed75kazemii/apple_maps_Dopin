@@ -22,6 +22,34 @@ To use this plugin on iOS you need to opt-in for the embedded views preview by a
 
 There is no Android implementation, but there is a package combining apple_maps_flutter and the google_maps_flutter plugin to have the typical map implementations for Android/iOS called platform_maps_flutter.
 
+## POI tap detection (iOS 17+)
+
+Apple Maps renders its own labelled Points Of Interest (cafes, shops, transit
+stops, …). On iOS 17 and newer this plugin exposes taps on those built-in POIs
+through the `onPOITap` callback — the Apple Maps analogue of Mapbox's
+`TapInteraction(StandardPOIs())`. On older iOS versions the callback is simply
+never invoked and the rest of the map behaves unchanged.
+
+```dart
+AppleMap(
+  initialCameraPosition: initialPosition,
+  onPOITap: (ApplePOIDetail poi) {
+    debugPrint('Tapped POI: ${poi.name} (${poi.category}) @ ${poi.position}');
+  },
+)
+```
+
+The payload exposes:
+
+- `name` — POI display name (nullable)
+- `latitude` / `longitude` — POI coordinate
+- `category` — `MKPointOfInterestCategory` identifier with the `MKPOICategory`
+  prefix stripped (e.g. `"Cafe"`, `"Restaurant"`), nullable
+
+When the rich `MKMapItem` metadata becomes available the callback fires a
+second time with the refined coordinate / category, so consumers can update
+their UI as more information loads.
+
 ## Sample Usage
 
 ```dart

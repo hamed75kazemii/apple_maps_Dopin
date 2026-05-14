@@ -40,6 +40,15 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         self.channel = channel
         self.options = options
         initialiseTapGestureRecognizers()
+        enableSelectableMapFeatures()
+    }
+
+    /// Enables native selection for Apple Maps built-in POIs on iOS 17+.
+    /// On older versions this is silently a no-op, matching backward-compat goals.
+    private func enableSelectableMapFeatures() {
+        if #available(iOS 17.0, *) {
+            self.selectableMapFeatures = [.pointsOfInterest]
+        }
     }
     
     var actualHeading: CLLocationDirection {

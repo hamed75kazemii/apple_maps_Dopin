@@ -37,8 +37,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   String _status = 'در انتظار ساخت نقشه…';
   BitmapDescriptor? _widgetMarkerIcon;
 
-  static const CameraPosition _tehran = CameraPosition(
-    target: LatLng(35.6892, 51.3890),
+  static const CameraPosition _losAngeles = CameraPosition(
+    target: LatLng(34.0522, -118.2437),
     zoom: 11,
   );
 
@@ -108,12 +108,12 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
         title: const Text('Apple Maps — تست فورک'),
         actions: [
           IconButton(
-            tooltip: 'مرکز روی تهران',
+            tooltip: 'مرکز روی لس‌آنجلس',
             onPressed: _controller == null
                 ? null
                 : () async {
                     await _controller!.moveCamera(
-                      CameraUpdate.newCameraPosition(_tehran),
+                      CameraUpdate.newCameraPosition(_losAngeles),
                     );
                   },
             icon: const Icon(Icons.my_location),
@@ -129,7 +129,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
           ),
           Expanded(
             child: AppleMap(
-              initialCameraPosition: _tehran,
+              initialCameraPosition: _losAngeles,
               onMapCreated: (AppleMapController controller) {
                 setState(() {
                   _controller = controller;
@@ -143,7 +143,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
                   : <Annotation>{
                       Annotation(
                         annotationId: const AnnotationId('widget_marker'),
-                        position: _tehran.target,
+                        position: _losAngeles.target,
                         icon: _widgetMarkerIcon!,
                         anchor: const Offset(0.5, 0.5),
                         glow: true,
@@ -156,6 +156,15 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
                   _status =
                       'ضربه: ${point.latitude.toStringAsFixed(4)}, '
                       '${point.longitude.toStringAsFixed(4)}';
+                });
+              },
+              onPOITap: (ApplePOIDetail poi) {
+                setState(() {
+                  _status =
+                      'POI: ${poi.name ?? "?"}'
+                      '${poi.category != null ? " · ${poi.category}" : ""}'
+                      ' (${poi.latitude.toStringAsFixed(4)}, '
+                      '${poi.longitude.toStringAsFixed(4)})';
                 });
               },
             ),

@@ -14,6 +14,16 @@ typedef void MapCreatedCallback(AppleMapController controller);
 /// This is used in [AppleMap.onCameraMove].
 typedef void CameraPositionCallback(CameraPosition position);
 
+/// Callback invoked when the user taps a built-in Apple Maps Point Of
+/// Interest (POI).
+///
+/// Only fires on iOS 17+, when MapKit's selectable map features are
+/// available. On older versions the map continues to behave as before and
+/// this callback is never invoked.
+///
+/// Used in [AppleMap.onPOITap].
+typedef void ApplePOITapCallback(ApplePOIDetail poi);
+
 class AppleMap extends StatefulWidget {
   const AppleMap({
     Key? key,
@@ -41,6 +51,7 @@ class AppleMap extends StatefulWidget {
     this.onCameraIdle,
     this.onTap,
     this.onLongPress,
+    this.onPOITap,
     this.snapshotOptions,
     this.insetsLayoutMarginsFromSafeArea = true,
   }) : super(key: key);
@@ -117,6 +128,19 @@ class AppleMap extends StatefulWidget {
 
   /// Called every time a [AppleMap] is long pressed.
   final ArgumentCallback<LatLng>? onLongPress;
+
+  /// Called when the user taps an Apple Maps built-in Point Of Interest (POI),
+  /// such as a cafe, museum, or shop label rendered by MapKit itself.
+  ///
+  /// This is the Apple Maps equivalent of Mapbox's
+  /// `TapInteraction(StandardPOIs())`.
+  ///
+  /// POI tap detection is only available on iOS 17 or newer; on older
+  /// versions the callback will never be invoked.
+  ///
+  /// The [ApplePOIDetail] payload includes the POI's coordinate plus an
+  /// optional name and category when MapKit makes them available.
+  final ApplePOITapCallback? onPOITap;
 
   /// True if a "My Location" layer should be shown on the map.
   ///
@@ -320,6 +344,10 @@ class _AppleMapState extends State<AppleMap> {
 
   void onLongPress(LatLng position) {
     widget.onLongPress?.call(position);
+  }
+
+  void onPOITap(ApplePOIDetail poi) {
+    widget.onPOITap?.call(poi);
   }
 }
 

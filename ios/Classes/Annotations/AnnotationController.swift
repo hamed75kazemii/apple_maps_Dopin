@@ -28,13 +28,88 @@ extension AppleMapController: AnnotationDelegate {
                 tapGestureRecognizer.annotationView = view
                 view.addGestureRecognizer(tapGestureRecognizer)
             }
+            return
         }
+
+        // Forward selection of Apple Maps built-in POIs (iOS 17+) to Flutter.
+        // Any non-FlutterAnnotation selection is routed through this helper; the
+        // cast is guarded so unsupported annotation types are ignored safely.
+        if #available(iOS 17.0, *) {
+            self.handlePOISelectionIfNeeded(view.annotation)
+        }
+    }
+
+    @available(iOS 17.0, *)
+    private func handlePOISelectionIfNeeded(_ annotation: MKAnnotation?) {
+        guard let feature = annotation as? MKMapFeatureAnnotation else {
+            return
+        }
+
+        let coordinate = feature.coordinate
+        let name = feature.title
+        let category = self.categoryString(for: feature.pointOfInterestCategory)
+
+        var payload: [String: Any] = [
+            "latitude": coordinate.latitude,
+            "longitude": coordinate.longitude,
+        ]
+        if let name = name {
+            payload["name"] = name
+        }
+        if let category = category {
+            payload["category"] = category
+        }
+
+        // Send immediately with the synchronously available data so Flutter
+        // can react without waiting on the network. If MKMapItemRequest is
+        // available we additionally resolve the richer MKMapItem and emit a
+        // second `map#onPOITap` with the placemark coordinate / category.
+        self.channel.invokeMethod("map#onPOITap", arguments: payload)
+
+        let request = MKMapItemRequest(mapFeatureAnnotation: feature)
+        request.getMapItem { [weak self] item, error in
+            guard let self = self, error == nil, let item = item else {
+                return
+            }
+            let placemarkCoordinate = item.placemark.coordinate
+            var resolved: [String: Any] = [
+                "latitude": placemarkCoordinate.latitude,
+                "longitude": placemarkCoordinate.longitude,
+            ]
+            if let resolvedName = item.name ?? name {
+                resolved["name"] = resolvedName
+            }
+            let resolvedCategory = self.categoryString(for: item.pointOfInterestCategory) ?? category
+            if let resolvedCategory = resolvedCategory {
+                resolved["category"] = resolvedCategory
+            }
+            self.channel.invokeMethod("map#onPOITap", arguments: resolved)
+        }
+    }
+
+    private func categoryString(for category: MKPointOfInterestCategory?) -> String? {
+        guard let category = category else { return nil }
+        // MKPointOfInterestCategory rawValue is a stable string identifier such
+        // as "MKPOICategoryCafe" - we strip the prefix so Flutter consumers
+        // receive a clean, lowercase-ish identifier (e.g. "Cafe").
+        let raw = category.rawValue
+        let prefix = "MKPOICategory"
+        if raw.hasPrefix(prefix) {
+            return String(raw.dropFirst(prefix.count))
+        }
+        return raw
     }
 
     public func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         if annotation is MKUserLocation {
             return nil
-        } else if let flutterAnnotation = annotation as? FlutterAnnotation {
+        }
+        // Let MapKit provide its default rendering for selectable POI features
+        // (`MKMapFeatureAnnotation`, iOS 17+) - we only customise FlutterAnnotation views.
+        if #available(iOS 17.0, *), annotation is MKMapFeatureAnnotation {
+            return nil
+        }
+        if let flutterAnnotation = annotation as? FlutterAnnotation {
             return self.getAnnotationView(annotation: flutterAnnotation)
         }
         return nil

@@ -77,6 +77,12 @@ class AppleMapController {
         _appleMapState
             .onLongPress(LatLng._fromJson(call.arguments['position'])!);
         break;
+      case 'map#onPOITap':
+        final ApplePOIDetail? poi = ApplePOIDetail._fromMap(call.arguments);
+        if (poi != null) {
+          _appleMapState.onPOITap(poi);
+        }
+        break;
       default:
         throw MissingPluginException();
     }
