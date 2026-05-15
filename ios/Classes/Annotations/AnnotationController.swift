@@ -30,12 +30,18 @@ extension AppleMapController: AnnotationDelegate {
             }
             return
         }
+    }
 
-        // Forward selection of Apple Maps built-in POIs (iOS 17+) to Flutter.
-        // Any non-FlutterAnnotation selection is routed through this helper; the
-        // cast is guarded so unsupported annotation types are ignored safely.
+    /// Built-in map features (`MKMapFeatureAnnotation`) are delivered through this
+    /// delegate method (iOS 16+), not `mapView(_:didSelect view:)`. POI forwarding
+    /// to Flutter is gated to iOS 17+ where `selectableMapFeatures` is supported.
+    @available(iOS 16.0, *)
+    public func mapView(_ mapView: MKMapView, didSelect annotation: MKAnnotation) {
+        if annotation is MKUserLocation || annotation is FlutterAnnotation {
+            return
+        }
         if #available(iOS 17.0, *) {
-            self.handlePOISelectionIfNeeded(view.annotation)
+            self.handlePOISelectionIfNeeded(annotation)
         }
     }
 
@@ -59,6 +65,7 @@ extension AppleMapController: AnnotationDelegate {
         if let category = category {
             payload["category"] = category
         }
+        self.appendIconFields(to: &payload, feature: feature, category: category)
 
         // Send immediately with the synchronously available data so Flutter
         // can react without waiting on the network. If MKMapItemRequest is
@@ -83,8 +90,40 @@ extension AppleMapController: AnnotationDelegate {
             if let resolvedCategory = resolvedCategory {
                 resolved["category"] = resolvedCategory
             }
+            self.appendIconFields(to: &resolved, feature: feature, category: resolvedCategory ?? category)
             self.channel.invokeMethod("map#onPOITap", arguments: resolved)
         }
+    }
+
+    @available(iOS 17.0, *)
+    private func appendIconFields(
+        to payload: inout [String: Any],
+        feature: MKMapFeatureAnnotation,
+        category: String?
+    ) {
+        if let category = category {
+            // Maki-style slug (e.g. "Cafe" -> "cafe") for client icon lookup.
+            payload["icon"] = category.prefix(1).lowercased() + category.dropFirst()
+        }
+        guard let iconStyle = feature.iconStyle else {
+            return
+        }
+        if let pngData = iconStyle.image.pngData() {
+            payload["iconPng"] = FlutterStandardTypedData(bytes: pngData)
+        }
+        payload["iconColor"] = self.colorToArgb(iconStyle.backgroundColor)
+    }
+
+    private func colorToArgb(_ color: UIColor) -> Int {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return (Int(alpha * 255.0) << 24)
+            | (Int(red * 255.0) << 16)
+            | (Int(green * 255.0) << 8)
+            | Int(blue * 255.0)
     }
 
     private func categoryString(for category: MKPointOfInterestCategory?) -> String? {

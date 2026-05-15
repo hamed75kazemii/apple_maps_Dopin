@@ -83,6 +83,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             if self.options != nil {
                 self.interpretOptions(options: self.options!)
             }
+            enableSelectableMapFeatures()
             if #available(iOS 9.0, *) {
                 setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: zoomLevel, animated: false)
                 mapContainerView = self.findViewOfType("MKScrollContainerView", inView: self)

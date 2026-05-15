@@ -63,6 +63,16 @@ class _POITapBodyState extends State<_POITapBody> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     if (poi.category != null) Text('Category: ${poi.category}'),
+                    if (poi.icon != null) Text('Icon: ${poi.icon}'),
+                    if (poi.iconPng != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Image.memory(
+                          poi.iconPng!,
+                          width: 32,
+                          height: 32,
+                        ),
+                      ),
                     Text(
                       '${poi.latitude.toStringAsFixed(5)}, '
                       '${poi.longitude.toStringAsFixed(5)}',

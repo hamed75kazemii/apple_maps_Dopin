@@ -45,6 +45,9 @@ The payload exposes:
 - `latitude` / `longitude` — POI coordinate
 - `category` — `MKPointOfInterestCategory` identifier with the `MKPOICategory`
   prefix stripped (e.g. `"Cafe"`, `"Restaurant"`), nullable
+- `icon` — lowercase category slug for icon packs (e.g. `"cafe"`), nullable
+- `iconPng` — PNG bytes of the MapKit POI glyph (`MKIconStyle.image`), nullable
+- `iconColor` — POI icon background tint as `0xAARRGGBB`, nullable
 
 When the rich `MKMapItem` metadata becomes available the callback fires a
 second time with the refined coordinate / category, so consumers can update

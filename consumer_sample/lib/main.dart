@@ -34,7 +34,8 @@ class MapSmokeTestScreen extends StatefulWidget {
 
 class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   AppleMapController? _controller;
-  String _status = 'در انتظار ساخت نقشه…';
+  String _status = 'روی یک مکان روی نقشه بزنید (POI — iOS 17+)';
+  ApplePOIDetail? _selectedPoi;
   BitmapDescriptor? _widgetMarkerIcon;
 
   static const CameraPosition _losAngeles = CameraPosition(
@@ -43,15 +44,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   );
 
   /// هر ویجتی که اینجا برمی‌گردد به PNG تبدیل می‌شود و روی نقشه به‌عنوان مارکر دیده می‌شود.
-  Widget _customMarkerWidget() {
-    return Container(
-      width: 20,
-      height: 20,
-
-      // padding: EdgeInsets.all(2),
-      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.purple),
-    );
-  }
 
   @override
   void initState() {
@@ -67,8 +59,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     try {
       final BitmapDescriptor icon = await WidgetMarker.toBitmapDescriptor(
         context,
-        marker: _customMarkerWidget(),
-        logicalSize: const Size(50, 50),
+        marker: Icon(Icons.person),
+        logicalSize: const Size(40, 40),
         pixelRatio: MediaQuery.devicePixelRatioOf(context).clamp(1.0, 4.0),
       );
       if (mounted) {
@@ -125,7 +117,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text(_status, style: Theme.of(context).textTheme.bodyMedium),
+            child: _selectedPoi == null
+                ? Text(_status, style: Theme.of(context).textTheme.bodyMedium)
+                : _PoiInfoCard(poi: _selectedPoi!),
           ),
           Expanded(
             child: AppleMap(
@@ -145,31 +139,132 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
                         annotationId: const AnnotationId('widget_marker'),
                         position: _losAngeles.target,
                         icon: _widgetMarkerIcon!,
-                        anchor: const Offset(0.5, 0.5),
+                        //   anchor: const Offset(0.5, 0.5),
                         glow: true,
                         glowColor: const Color(0xFFEC30E4),
                         glowIntensity: 1,
                       ),
                     },
-              onTap: (LatLng point) {
-                setState(() {
-                  _status =
-                      'ضربه: ${point.latitude.toStringAsFixed(4)}, '
-                      '${point.longitude.toStringAsFixed(4)}';
-                });
-              },
+              // onTap: (LatLng point) {
+              //   setState(() {
+              //     _status =
+              //         'ضربه: ${point.latitude.toStringAsFixed(4)}, '
+              //         '${point.longitude.toStringAsFixed(4)}';
+              //   });
+              // },
               onPOITap: (ApplePOIDetail poi) {
-                setState(() {
-                  _status =
-                      'POI: ${poi.name ?? "?"}'
-                      '${poi.category != null ? " · ${poi.category}" : ""}'
-                      ' (${poi.latitude.toStringAsFixed(4)}, '
-                      '${poi.longitude.toStringAsFixed(4)})';
-                });
+                setState(() => _selectedPoi = poi);
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// کارت نمایش POI انتخاب‌شده همراه با آیکون MapKit.
+class _PoiInfoCard extends StatelessWidget {
+  const _PoiInfoCard({required this.poi});
+
+  final ApplePOIDetail poi;
+
+  Color? get _iconBackground {
+    final int? argb = poi.iconColor;
+    if (argb == null) return null;
+    return Color(argb);
+  }
+
+  IconData _fallbackIcon() {
+    switch (poi.icon ?? poi.category?.toLowerCase()) {
+      case 'cafe':
+        return Icons.local_cafe;
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'store':
+      case 'foodmarket':
+        return Icons.store;
+      case 'museum':
+        return Icons.museum;
+      case 'park':
+        return Icons.park;
+      case 'hotel':
+        return Icons.hotel;
+      case 'gasstation':
+        return Icons.local_gas_station;
+      case 'hospital':
+        return Icons.local_hospital;
+      case 'school':
+      case 'university':
+        return Icons.school;
+      default:
+        return Icons.place;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color? bg = _iconBackground;
+    final png = poi.iconPng;
+
+    return Material(
+      elevation: 1,
+      borderRadius: BorderRadius.circular(12),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: bg ?? Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: png != null
+                  ? Image.memory(
+                      png,
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    )
+                  : Icon(
+                      _fallbackIcon(),
+                      size: 28,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    poi.name ?? 'بدون نام',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (poi.category != null)
+                    Text(
+                      poi.category!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${poi.latitude.toStringAsFixed(5)}, '
+                    '${poi.longitude.toStringAsFixed(5)}',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
