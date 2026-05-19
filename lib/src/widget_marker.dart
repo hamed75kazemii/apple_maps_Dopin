@@ -96,9 +96,11 @@ abstract final class WidgetMarker {
             throw StateError('WidgetMarker: Expected RenderRepaintBoundary.');
           }
           final RenderRepaintBoundary boundary = ro;
-          if (boundary.debugNeedsPaint) {
-            await Future<void>.delayed(const Duration(milliseconds: 16));
-          }
+          // Do not use [RenderRepaintBoundary.debugNeedsPaint] here: in profile/release
+          // its assert body is stripped and reading it throws LateInitializationError
+          // ("local result has not been initialized").
+          await WidgetsBinding.instance.endOfFrame;
+          await WidgetsBinding.instance.endOfFrame;
           final ui.Image raster =
               await boundary.toImage(pixelRatio: pixelRatio);
           final ByteData? bd =
