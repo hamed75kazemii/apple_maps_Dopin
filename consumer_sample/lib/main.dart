@@ -1,7 +1,14 @@
+import 'dart:developer';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show
+        consolidateHttpClientResponseBytes,
+        defaultTargetPlatform,
+        kIsWeb,
+        TargetPlatform;
 import 'package:flutter/material.dart';
 
 void main() {
@@ -34,47 +41,109 @@ class MapSmokeTestScreen extends StatefulWidget {
 
 class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   AppleMapController? _controller;
-  String _status = 'روی یک مکان روی نقشه بزنید (POI — iOS 17+)';
+  String _status = 'روی مارکرها بزنید — مارکرهای نیتیو Dopin';
   ApplePOIDetail? _selectedPoi;
-  BitmapDescriptor? _widgetMarkerIcon;
+  String? _lastTappedMarkerId;
 
   static const CameraPosition _losAngeles = CameraPosition(
     target: LatLng(34.0522, -118.2437),
-    zoom: 11,
+    zoom: 12,
   );
 
-  /// هر ویجتی که اینجا برمی‌گردد به PNG تبدیل می‌شود و روی نقشه به‌عنوان مارکر دیده می‌شود.
+  static const String _demoAvatarUrl = 'https://i.pravatar.cc/150?img=12';
+
+  static const Color _primaryColor = Color(0xFF7B2CBF);
+  static const Color _secondPrimaryColor = Color(0xFFEC30E4);
+
+  /// PNG برای مارکر event (از URL به‌عنوان نمونه).
+  Uint8List? _eventPng;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _buildWidgetMarkerIcon(),
-    );
+    _loadEventPng();
   }
 
-  Future<void> _buildWidgetMarkerIcon() async {
+  Future<void> _loadEventPng() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
-    if (!mounted) return;
     try {
-      final BitmapDescriptor icon = await WidgetMarker.toBitmapDescriptor(
-        context,
-        marker: Icon(Icons.person),
-        logicalSize: const Size(40, 40),
-        pixelRatio: MediaQuery.devicePixelRatioOf(context).clamp(1.0, 4.0),
+      final HttpClientRequest request = await HttpClient().getUrl(
+        Uri.parse(_demoAvatarUrl),
+      );
+      final HttpClientResponse response = await request.close();
+      final Uint8List bytes = await consolidateHttpClientResponseBytes(
+        response,
       );
       if (mounted) {
         setState(() {
-          _widgetMarkerIcon = icon;
-          _status =
-              'نقشه + مارکر ویجتی با هالهٔ تکرارشونده تا وقتی glow روشن است.';
+          _eventPng = bytes;
+          _status = 'مارکر event: تصویر PNG';
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _status = 'خطا در ساخت مارکر از ویجت: $e');
+        setState(() => _status = 'خطا در لود PNG: $e');
       }
     }
+  }
+
+  Set<Annotation> get _dopinAnnotations => <Annotation>{
+    Annotation(
+      annotationId: const AnnotationId('marker_me'),
+      position: const LatLng(34.0522, -118.2437),
+      onTap: () => _onMarkerTap('marker_me'),
+
+      glow: true,
+
+      dopinMarker: const DopinMarker(
+        style: DopinMarkerStyle.me,
+        imageUrl: _demoAvatarUrl,
+        label: 'Me',
+        primaryColor: _primaryColor,
+        secondPrimaryColor: _secondPrimaryColor,
+      ),
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_event'),
+      position: const LatLng(34.0622, -118.2437),
+      onTap: () => _onMarkerTap('marker_event'),
+      dopinMarker: DopinMarker.withPng(
+        style: DopinMarkerStyle.event,
+        imagePng: _eventPng ?? Uint8List(0),
+        borderColor: Colors.white,
+      ),
+    ),
+    Annotation(
+      //    visible: false,
+      annotationId: const AnnotationId('marker_dopin'),
+      position: const LatLng(34.0422, -118.2537),
+      onTap: () => _onMarkerTap('marker_dopin'),
+
+      dopinMarker: const DopinMarker(
+        style: DopinMarkerStyle.dopin,
+        imageUrl: _demoAvatarUrl,
+        borderColor: _secondPrimaryColor,
+      ),
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_cluster'),
+      position: const LatLng(34.0522, -118.2637),
+      anchor: const Offset(0.5, 0.5),
+      onTap: () => _onMarkerTap('marker_cluster'),
+      dopinMarker: const DopinMarker(
+        style: DopinMarkerStyle.cluster,
+        clusterCount: 12,
+      ),
+    ),
+  };
+
+  void _onMarkerTap(String id) {
+    log('onMarkerTap: $id');
+    setState(() {
+      _lastTappedMarkerId = id;
+      _status = 'کلیک مارکر: $id';
+      _selectedPoi = null;
+    });
   }
 
   @override
@@ -87,7 +156,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
             padding: EdgeInsets.all(24),
             child: Text(
               'این پلاگین برای نمایش Apple Map روی iOS طراحی شده است.\n'
-              'روی شبی‌ساز یا دستگاه iOS اجرا کنید.',
+              'روی شبیه‌ساز یا دستگاه iOS اجرا کنید.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -97,7 +166,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Apple Maps — تست فورک'),
+        title: const Text('Apple Maps — مارکر Dopin'),
         actions: [
           IconButton(
             tooltip: 'مرکز روی لس‌آنجلس',
@@ -117,43 +186,35 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: _selectedPoi == null
-                ? Text(_status, style: Theme.of(context).textTheme.bodyMedium)
-                : _PoiInfoCard(poi: _selectedPoi!),
+            child: _selectedPoi != null
+                ? _PoiInfoCard(poi: _selectedPoi!)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _status,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if (_lastTappedMarkerId != null)
+                        Text(
+                          'annotationId: $_lastTappedMarkerId',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                    ],
+                  ),
           ),
           Expanded(
             child: AppleMap(
               initialCameraPosition: _losAngeles,
               onMapCreated: (AppleMapController controller) {
-                setState(() {
-                  _controller = controller;
-                  if (_widgetMarkerIcon == null) {
-                    _status = 'نقشه آماده است؛ در حال ساخت مارکر ویجتی…';
-                  }
-                });
+                setState(() => _controller = controller);
               },
-              annotations: _widgetMarkerIcon == null
-                  ? null
-                  : <Annotation>{
-                      Annotation(
-                        annotationId: const AnnotationId('widget_marker'),
-                        position: _losAngeles.target,
-                        icon: _widgetMarkerIcon!,
-                        //   anchor: const Offset(0.5, 0.5),
-                        glow: true,
-                        glowColor: const Color(0xFFEC30E4),
-                        glowIntensity: 1,
-                      ),
-                    },
-              // onTap: (LatLng point) {
-              //   setState(() {
-              //     _status =
-              //         'ضربه: ${point.latitude.toStringAsFixed(4)}, '
-              //         '${point.longitude.toStringAsFixed(4)}';
-              //   });
-              // },
+              annotations: _dopinAnnotations,
               onPOITap: (ApplePOIDetail poi) {
-                setState(() => _selectedPoi = poi);
+                setState(() {
+                  _selectedPoi = poi;
+                  _lastTappedMarkerId = null;
+                });
               },
             ),
           ),

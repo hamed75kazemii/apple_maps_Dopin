@@ -18,6 +18,14 @@ extension AppleMapController: AnnotationDelegate {
                     self.moveToFront(annotation: annotation)
                 }
                 self.onAnnotationClick(annotation: annotation)
+                // Deselect so the same marker can be tapped again (MapKit only fires didSelect once while selected).
+                let annotationToDeselect = annotation
+                DispatchQueue.main.async { [weak self] in
+                    self?.mapView.deselectAnnotation(annotationToDeselect, animated: false)
+                }
+                if self.currentlySelectedAnnotation == annotation.id {
+                    self.currentlySelectedAnnotation = nil
+                }
             } else {
                 annotation.selectedProgrammatically = false
             }
@@ -158,8 +166,17 @@ extension AppleMapController: AnnotationDelegate {
         let identifier: String = annotation.id
         var annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
         let oldflutterAnnoation = annotationView?.annotation as? FlutterAnnotation
-        if annotationView == nil || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType || oldflutterAnnoation?.glow != annotation.glow {
-            if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
+        let oldDopinSig = oldflutterAnnoation?.dopinMarkerSignature
+        let newDopinSig = annotation.dopinMarkerSignature
+        let dopinStyleChanged = oldflutterAnnoation?.dopinMarkerStyle != annotation.dopinMarkerStyle
+        if annotationView == nil
+            || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType
+            || oldflutterAnnoation?.glow != annotation.glow
+            || dopinStyleChanged
+            || (annotation.dopinMarkerStyle != nil && oldDopinSig != newDopinSig) {
+            if annotation.dopinMarkerStyle != nil {
+                annotationView = getDopinMarkerAnnotationView(annotation: annotation, id: identifier)
+            } else if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
                 annotationView = getMarkerAnnotationView(annotation: annotation, id: identifier)
             } else if annotation.icon.iconType == .CUSTOM_FROM_ASSET || annotation.icon.iconType == .CUSTOM_FROM_BYTES {
                 annotationView = getCustomAnnotationView(annotation: annotation, id: identifier)
@@ -171,6 +188,9 @@ extension AppleMapController: AnnotationDelegate {
             return FlutterAnnotationView()
         }
         annotationView!.annotation = annotation
+        if let dopinView = annotationView as? DopinMarkerAnnotationView {
+            dopinView.configureIfNeeded()
+        }
         // If annotation is not visible set alpha to 0 and don't let the user interact with it
         if !annotation.isVisible! {
             annotationView!.canShowCallout = false
@@ -180,7 +200,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         if annotation.icon.iconType != .MARKER {
             self.initInfoWindow(annotation: annotation, annotationView: annotationView!)
-            if annotation.icon.iconType != .PIN {
+            if annotation.icon.iconType != .PIN || annotation.dopinMarkerStyle != nil {
                 let x = (0.5 - annotation.anchor.x) * Double(annotationView!.frame.size.width)
                 let y = (0.5 - annotation.anchor.y) * Double(annotationView!.frame.size.height)
                 annotationView!.centerOffset = CGPoint(x: x, y: y)
@@ -231,7 +251,6 @@ extension AppleMapController: AnnotationDelegate {
 
     func onAnnotationClick(annotation: MKAnnotation) {
         if let flutterAnnotation: FlutterAnnotation = annotation as? FlutterAnnotation {
-            flutterAnnotation.wasDragged = true
             channel.invokeMethod("annotation#onTap", arguments: ["annotationId" : flutterAnnotation.id])
         }
     }
@@ -328,12 +347,28 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.isVisible = annotation.isVisible
                 oldAnnotation.title = annotation.title
                 oldAnnotation.subtitle = annotation.subtitle
+                oldAnnotation.dopinMarkerStyle = annotation.dopinMarkerStyle
+                oldAnnotation.dopinImageUrl = annotation.dopinImageUrl
+                oldAnnotation.dopinImagePngData = annotation.dopinImagePngData
+                oldAnnotation.dopinImageAssetName = annotation.dopinImageAssetName
+                oldAnnotation.dopinImageAssetScale = annotation.dopinImageAssetScale
+                oldAnnotation.dopinMarkerLabel = annotation.dopinMarkerLabel
+                oldAnnotation.dopinClusterCount = annotation.dopinClusterCount
+                oldAnnotation.dopinPrimaryColor = annotation.dopinPrimaryColor
+                oldAnnotation.dopinSecondPrimaryColor = annotation.dopinSecondPrimaryColor
+                oldAnnotation.dopinBorderColor = annotation.dopinBorderColor
             })
             
-            // Update the annotation view with the new image
             if let view = self.mapView.view(for: oldAnnotation) {
-                let newAnnotationView = getAnnotationView(annotation: annotation)
-                view.image = newAnnotationView.image
+                if annotation.dopinMarkerStyle != nil {
+                    let newView = getAnnotationView(annotation: annotation)
+                    view.frame.size = newView.frame.size
+                    view.bounds = newView.bounds
+                    view.setNeedsLayout()
+                } else {
+                    let newAnnotationView = getAnnotationView(annotation: annotation)
+                    view.image = newAnnotationView.image
+                }
             }
         }
     }
@@ -378,6 +413,20 @@ extension AppleMapController: AnnotationDelegate {
         }
 
         return markerAnnotationView
+    }
+
+    private func getDopinMarkerAnnotationView(annotation: FlutterAnnotation, id: String) -> DopinMarkerAnnotationView {
+        let reuseId = "dopin_\(id)"
+        let annotationView: DopinMarkerAnnotationView
+        if #available(iOS 11.0, *) {
+            self.mapView.register(DopinMarkerAnnotationView.self, forAnnotationViewWithReuseIdentifier: reuseId)
+            annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: reuseId, for: annotation) as! DopinMarkerAnnotationView
+        } else {
+            annotationView = DopinMarkerAnnotationView(annotation: annotation, reuseIdentifier: reuseId)
+        }
+        annotationView.stickyZPosition = annotation.zIndex
+        annotationView.canShowCallout = annotation.title != nil || annotation.subtitle != nil
+        return annotationView
     }
 
     private func getCustomAnnotationView(annotation: FlutterAnnotation, id: String) -> FlutterAnnotationView {

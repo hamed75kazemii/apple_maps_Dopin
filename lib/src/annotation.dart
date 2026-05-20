@@ -158,7 +158,8 @@ class Annotation {
     this.glow = false,
     this.glowColor = const Color(0xFFEC30E4),
     this.glowIntensity = 1.0,
-  }) : assert(0.0 <= alpha && alpha <= 1.0),
+    this.dopinMarker,
+  })  : assert(0.0 <= alpha && alpha <= 1.0),
         assert(0.0 <= glowIntensity && glowIntensity <= 1.0);
 
   /// Uniquely identifies a [Annotation].
@@ -205,8 +206,8 @@ class Annotation {
   /// earlier, and thus appearing to be closer to the surface of the Earth.
   double zIndex;
 
-  /// When true (iOS, custom [BitmapDescriptor] only), draws a glow ring that **loops**
-  /// full outward pulses (expand + fade) while [glow] stays true—no fixed pulse count.
+  /// When true (iOS), draws a repeating glow pulse behind the marker
+  /// ([BitmapDescriptor] or [DopinMarker]).
   final bool glow;
 
   /// ARGB color for the glow; alpha is multiplied with [glowIntensity] on the native side.
@@ -214,6 +215,10 @@ class Annotation {
 
   /// Strength of the effect in `0.0`…`1.0` (peak opacity and scale reach).
   final double glowIntensity;
+
+  /// When set (iOS), the marker is drawn natively (me / event / dopin / cluster).
+  /// Use [onTap] for tap handling; [annotationId] is sent to Flutter on tap.
+  final DopinMarker? dopinMarker;
 
   /// Creates a new [Annotation] object whose values are the same as this instance,
   /// unless overwritten by the specified parameters.
@@ -232,6 +237,7 @@ class Annotation {
     bool? glowParam,
     Color? glowColorParam,
     double? glowIntensityParam,
+    DopinMarker? dopinMarkerParam,
   }) {
     return Annotation(
       annotationId: annotationId,
@@ -248,6 +254,7 @@ class Annotation {
       glow: glowParam ?? glow,
       glowColor: glowColorParam ?? glowColor,
       glowIntensity: glowIntensityParam ?? glowIntensity,
+      dopinMarker: dopinMarkerParam ?? dopinMarker,
     );
   }
 
@@ -274,6 +281,9 @@ class Annotation {
       json['glowColor'] = glowColor.value;
       json['glowIntensity'] = glowIntensity;
     }
+    if (dopinMarker != null) {
+      json['dopinMarker'] = dopinMarker!._toJson();
+    }
     return json;
   }
 
@@ -293,7 +303,8 @@ class Annotation {
         zIndex == typedOther.zIndex &&
         glow == typedOther.glow &&
         glowColor == typedOther.glowColor &&
-        glowIntensity == typedOther.glowIntensity;
+        glowIntensity == typedOther.glowIntensity &&
+        dopinMarker == typedOther.dopinMarker;
   }
 
   @override
@@ -310,6 +321,7 @@ class Annotation {
         glow,
         glowColor,
         glowIntensity,
+        dopinMarker,
       );
 
   @override
