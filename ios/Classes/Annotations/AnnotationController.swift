@@ -168,13 +168,13 @@ extension AppleMapController: AnnotationDelegate {
         let oldflutterAnnoation = annotationView?.annotation as? FlutterAnnotation
         let oldDopinSig = oldflutterAnnoation?.dopinMarkerSignature
         let newDopinSig = annotation.dopinMarkerSignature
-        let dopinStyleChanged = oldflutterAnnoation?.dopinMarkerStyle != annotation.dopinMarkerStyle
+        let dopinUsageChanged = oldflutterAnnoation?.usesDopinMarker != annotation.usesDopinMarker
         if annotationView == nil
             || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType
             || oldflutterAnnoation?.glow != annotation.glow
-            || dopinStyleChanged
-            || (annotation.dopinMarkerStyle != nil && oldDopinSig != newDopinSig) {
-            if annotation.dopinMarkerStyle != nil {
+            || dopinUsageChanged
+            || (annotation.usesDopinMarker && oldDopinSig != newDopinSig) {
+            if annotation.usesDopinMarker {
                 annotationView = getDopinMarkerAnnotationView(annotation: annotation, id: identifier)
             } else if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
                 annotationView = getMarkerAnnotationView(annotation: annotation, id: identifier)
@@ -200,7 +200,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         if annotation.icon.iconType != .MARKER {
             self.initInfoWindow(annotation: annotation, annotationView: annotationView!)
-            if annotation.icon.iconType != .PIN || annotation.dopinMarkerStyle != nil {
+            if annotation.icon.iconType != .PIN || annotation.usesDopinMarker {
                 let x = (0.5 - annotation.anchor.x) * Double(annotationView!.frame.size.width)
                 let y = (0.5 - annotation.anchor.y) * Double(annotationView!.frame.size.height)
                 annotationView!.centerOffset = CGPoint(x: x, y: y)
@@ -347,20 +347,24 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.isVisible = annotation.isVisible
                 oldAnnotation.title = annotation.title
                 oldAnnotation.subtitle = annotation.subtitle
-                oldAnnotation.dopinMarkerStyle = annotation.dopinMarkerStyle
+                oldAnnotation.usesDopinMarker = annotation.usesDopinMarker
                 oldAnnotation.dopinImageUrl = annotation.dopinImageUrl
                 oldAnnotation.dopinImagePngData = annotation.dopinImagePngData
                 oldAnnotation.dopinImageAssetName = annotation.dopinImageAssetName
                 oldAnnotation.dopinImageAssetScale = annotation.dopinImageAssetScale
                 oldAnnotation.dopinMarkerLabel = annotation.dopinMarkerLabel
-                oldAnnotation.dopinClusterCount = annotation.dopinClusterCount
-                oldAnnotation.dopinPrimaryColor = annotation.dopinPrimaryColor
-                oldAnnotation.dopinSecondPrimaryColor = annotation.dopinSecondPrimaryColor
+                oldAnnotation.dopinFrameWidth = annotation.dopinFrameWidth
+                oldAnnotation.dopinFrameHeight = annotation.dopinFrameHeight
+                oldAnnotation.dopinBorderWidth = annotation.dopinBorderWidth
                 oldAnnotation.dopinBorderColor = annotation.dopinBorderColor
+                oldAnnotation.dopinBorderRadius = annotation.dopinBorderRadius
+                oldAnnotation.dopinLabelFontSize = annotation.dopinLabelFontSize
+                oldAnnotation.dopinBadgeHeight = annotation.dopinBadgeHeight
+                oldAnnotation.dopinLabelColor = annotation.dopinLabelColor
             })
             
             if let view = self.mapView.view(for: oldAnnotation) {
-                if annotation.dopinMarkerStyle != nil {
+                if annotation.usesDopinMarker {
                     let newView = getAnnotationView(annotation: annotation)
                     view.frame.size = newView.frame.size
                     view.bounds = newView.bounds

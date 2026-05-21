@@ -41,7 +41,7 @@ class MapSmokeTestScreen extends StatefulWidget {
 
 class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   AppleMapController? _controller;
-  String _status = 'روی مارکرها بزنید — مارکرهای نیتیو Dopin';
+  String _status = 'روی مارکرها بزنید — مارکر Dopin';
   ApplePOIDetail? _selectedPoi;
   String? _lastTappedMarkerId;
 
@@ -52,10 +52,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
 
   static const String _demoAvatarUrl = 'https://i.pravatar.cc/150?img=12';
 
-  static const Color _primaryColor = Color(0xFF7B2CBF);
-  static const Color _secondPrimaryColor = Color(0xFFEC30E4);
+  static const Color _labelColor = Color(0xFF7B2CBF);
 
-  /// PNG برای مارکر event (از URL به‌عنوان نمونه).
   Uint8List? _eventPng;
 
   @override
@@ -77,7 +75,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       if (mounted) {
         setState(() {
           _eventPng = bytes;
-          _status = 'مارکر event: تصویر PNG';
+          _status = 'مارکر PNG لود شد';
         });
       }
     } catch (e) {
@@ -92,47 +90,58 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       annotationId: const AnnotationId('marker_me'),
       position: const LatLng(34.0522, -118.2437),
       onTap: () => _onMarkerTap('marker_me'),
-
       glow: true,
-
       dopinMarker: const DopinMarker(
-        style: DopinMarkerStyle.me,
         imageUrl: _demoAvatarUrl,
         label: 'Me',
-        primaryColor: _primaryColor,
-        secondPrimaryColor: _secondPrimaryColor,
+        width: 40,
+        height: 40,
+        borderWidth: 2,
+        borderColor: Colors.white,
+        borderRadius: 12,
+        labelColor: _labelColor,
       ),
     ),
     Annotation(
-      annotationId: const AnnotationId('marker_event'),
+      annotationId: const AnnotationId('marker_circle'),
       position: const LatLng(34.0622, -118.2437),
-      onTap: () => _onMarkerTap('marker_event'),
+      onTap: () => _onMarkerTap('marker_circle'),
       dopinMarker: DopinMarker.withPng(
-        style: DopinMarkerStyle.event,
         imagePng: _eventPng ?? Uint8List(0),
+        width: 40,
+        height: 40,
+        borderWidth: 2,
         borderColor: Colors.white,
       ),
     ),
     Annotation(
-      //    visible: false,
       annotationId: const AnnotationId('marker_dopin'),
       position: const LatLng(34.0422, -118.2537),
       onTap: () => _onMarkerTap('marker_dopin'),
-
       dopinMarker: const DopinMarker(
-        style: DopinMarkerStyle.dopin,
         imageUrl: _demoAvatarUrl,
-        borderColor: _secondPrimaryColor,
+        width: 43,
+        height: 43,
+        borderWidth: 2,
+        borderColor: Color(0xFFEC30E4),
+        borderRadius: 12,
       ),
     ),
     Annotation(
-      annotationId: const AnnotationId('marker_cluster'),
+      annotationId: const AnnotationId('marker_count'),
       position: const LatLng(34.0522, -118.2637),
       anchor: const Offset(0.5, 0.5),
-      onTap: () => _onMarkerTap('marker_cluster'),
+      onTap: () => _onMarkerTap('marker_count'),
+
       dopinMarker: const DopinMarker(
-        style: DopinMarkerStyle.cluster,
-        clusterCount: 12,
+        label: '12',
+        width: 56,
+        height: 56,
+        borderWidth: 3,
+        borderColor: Color(0xFFEC30E4),
+        labelFontSize: 22,
+        badgeHeight: 22,
+        labelColor: _labelColor,
       ),
     ),
   };
@@ -224,7 +233,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   }
 }
 
-/// کارت نمایش POI انتخاب‌شده همراه با آیکون MapKit.
 class _PoiInfoCard extends StatelessWidget {
   const _PoiInfoCard({required this.poi});
 

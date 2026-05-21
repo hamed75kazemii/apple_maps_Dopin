@@ -4,72 +4,68 @@
 
 part of apple_maps_flutter;
 
-/// Native-rendered marker styles (iOS). Matches Dopin app map markers.
-enum DopinMarkerStyle {
-  /// Avatar with gradient frame and bottom label (default "Me").
-  me,
-
-  /// Circular event pin with shadow and white ring.
-  event,
-
-  /// Rounded avatar pin with white border and soft shadow.
-  dopin,
-
-  /// Cluster bubble with gradient ring and count (`9+` when count > 9).
-  cluster,
-}
-
-/// Configuration for a native Dopin marker on Apple Maps (iOS only).
+/// Native Dopin map marker (iOS). Image + optional border + optional bottom label.
 ///
-/// Image source priority on iOS: [imagePng] → [imageFromAsset] → [imageUrl].
+/// Image priority: [imagePng] → [imageFromAsset] → [imageUrl].
+/// If [borderRadius] is omitted, the marker is drawn as a circle.
 @immutable
 class DopinMarker {
   const DopinMarker({
-    required this.style,
     this.imageUrl,
     this.imagePng,
     this.imageFromAsset,
-    this.label = 'Me',
-    this.clusterCount = 1,
-    this.primaryColor = const Color(0xFF7B2CBF),
-    this.secondPrimaryColor = const Color(0xFFEC30E4),
+    this.label,
+    this.width = 40,
+    this.height = 40,
+    this.borderWidth = 2,
     this.borderColor = Colors.white,
+    this.borderRadius,
+    this.labelFontSize = 10,
+    this.badgeHeight = 18,
+    this.labelColor = const Color(0xFF7B2CBF),
   });
 
-  /// PNG bytes (e.g. from file, network, or [rootBundle.load]).
   factory DopinMarker.withPng({
-    required DopinMarkerStyle style,
     required Uint8List imagePng,
     String? label,
-    int clusterCount = 1,
-    Color primaryColor = const Color(0xFF7B2CBF),
-    Color secondPrimaryColor = const Color(0xFFEC30E4),
+    double width = 40,
+    double height = 40,
+    double borderWidth = 2,
     Color borderColor = Colors.white,
+    double? borderRadius,
+    double labelFontSize = 10,
+    double badgeHeight = 18,
+    Color labelColor = const Color(0xFF7B2CBF),
   }) {
     return DopinMarker(
-      style: style,
       imagePng: imagePng,
       label: label,
-      clusterCount: clusterCount,
-      primaryColor: primaryColor,
-      secondPrimaryColor: secondPrimaryColor,
+      width: width,
+      height: height,
+      borderWidth: borderWidth,
       borderColor: borderColor,
+      borderRadius: borderRadius,
+      labelFontSize: labelFontSize,
+      badgeHeight: badgeHeight,
+      labelColor: labelColor,
     );
   }
 
-  /// PNG from a Flutter asset (resolution-aware, same as [BitmapDescriptor.fromAssetImage]).
   static Future<DopinMarker> withAssetImage(
     ImageConfiguration configuration,
     String assetName, {
-    required DopinMarkerStyle style,
     AssetBundle? bundle,
     String? package,
     bool mipmaps = true,
     String? label,
-    int clusterCount = 1,
-    Color primaryColor = const Color(0xFF7B2CBF),
-    Color secondPrimaryColor = const Color(0xFFEC30E4),
+    double width = 40,
+    double height = 40,
+    double borderWidth = 2,
     Color borderColor = Colors.white,
+    double? borderRadius,
+    double labelFontSize = 10,
+    double badgeHeight = 18,
+    Color labelColor = const Color(0xFF7B2CBF),
   }) async {
     List<dynamic> assetJson;
     if (!mipmaps && configuration.devicePixelRatio != null) {
@@ -84,52 +80,57 @@ class DopinMarker {
       assetJson = <dynamic>[key.name, key.scale];
     }
     return DopinMarker(
-      style: style,
       imageFromAsset: assetJson,
       label: label,
-      clusterCount: clusterCount,
-      primaryColor: primaryColor,
-      secondPrimaryColor: secondPrimaryColor,
+      width: width,
+      height: height,
+      borderWidth: borderWidth,
       borderColor: borderColor,
+      borderRadius: borderRadius,
+      labelFontSize: labelFontSize,
+      badgeHeight: badgeHeight,
+      labelColor: labelColor,
     );
   }
 
-  final DopinMarkerStyle style;
-
-  /// Remote image URL.
   final String? imageUrl;
-
-  /// PNG-encoded image bytes.
   final Uint8List? imagePng;
-
-  /// Resolved asset descriptor `[lookupKey, scale]` for the iOS bundle.
   final List<dynamic>? imageFromAsset;
 
-  /// Bottom badge text for [DopinMarkerStyle.me] (e.g. "Me").
+  /// Bottom badge; `null` or empty = no badge.
   final String? label;
 
-  /// Item count for [DopinMarkerStyle.cluster].
-  final int clusterCount;
-
-  final Color primaryColor;
-  final Color secondPrimaryColor;
-
-  /// Border / ring color (event & dopin). Cluster ring gradient starts here.
-  /// [DopinMarkerStyle.me] frame is always white; label uses [primaryColor]→[secondPrimaryColor].
+  final double width;
+  final double height;
+  final double borderWidth;
   final Color borderColor;
 
+  /// Outer corner radius. `null` → circle (half of min [width], [height]).
+  final double? borderRadius;
+
+  final double labelFontSize;
+  final double badgeHeight;
+  final Color labelColor;
+
   Map<String, dynamic> _toJson() {
-    return <String, dynamic>{
-      'style': style.name,
+    final Map<String, dynamic> json = <String, dynamic>{
+      'width': width,
+      'height': height,
+      'borderWidth': borderWidth,
+      'borderColor': borderColor.value,
+      'labelFontSize': labelFontSize,
+      'badgeHeight': badgeHeight,
+      'labelColor': labelColor.value,
       if (imageUrl != null) 'imageUrl': imageUrl,
       if (imagePng != null) 'imagePng': imagePng,
       if (imageFromAsset != null) 'imageFromAsset': imageFromAsset,
-      if (label != null) 'label': label,
-      'clusterCount': clusterCount,
-      'primaryColor': primaryColor.value,
-      'secondPrimaryColor': secondPrimaryColor.value,
-      'borderColor': borderColor.value,
+      if (borderRadius != null) 'borderRadius': borderRadius,
     };
+    final String? trimmed = label?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      json['label'] = trimmed;
+    }
+    return json;
   }
 
   @override
@@ -137,28 +138,34 @@ class DopinMarker {
     if (identical(this, other)) return true;
     if (other is! DopinMarker) return false;
     final DopinMarker o = other;
-    return style == o.style &&
-        imageUrl == o.imageUrl &&
+    return imageUrl == o.imageUrl &&
         _bytesEqual(imagePng, o.imagePng) &&
         _listEqual(imageFromAsset, o.imageFromAsset) &&
         label == o.label &&
-        clusterCount == o.clusterCount &&
-        primaryColor == o.primaryColor &&
-        secondPrimaryColor == o.secondPrimaryColor &&
-        borderColor == o.borderColor;
+        width == o.width &&
+        height == o.height &&
+        borderWidth == o.borderWidth &&
+        borderColor == o.borderColor &&
+        borderRadius == o.borderRadius &&
+        labelFontSize == o.labelFontSize &&
+        badgeHeight == o.badgeHeight &&
+        labelColor == o.labelColor;
   }
 
   @override
   int get hashCode => Object.hash(
-        style,
         imageUrl,
         imagePng?.length,
         imageFromAsset == null ? null : Object.hashAll(imageFromAsset!),
         label,
-        clusterCount,
-        primaryColor,
-        secondPrimaryColor,
+        width,
+        height,
+        borderWidth,
         borderColor,
+        borderRadius,
+        labelFontSize,
+        badgeHeight,
+        labelColor,
       );
 
   static bool _bytesEqual(Uint8List? a, Uint8List? b) {

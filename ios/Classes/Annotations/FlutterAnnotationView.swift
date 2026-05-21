@@ -296,8 +296,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     private func applyAnnotationIfNeeded(force: Bool) {
-        guard let flutter = annotation as? FlutterAnnotation,
-              let style = flutter.dopinMarkerStyle else { return }
+        guard let flutter = annotation as? FlutterAnnotation, flutter.usesDopinMarker else { return }
 
         let sig = flutter.dopinMarkerSignature
         if !force, sig == configuredSignature { return }
@@ -308,25 +307,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         backgroundColor = .clear
         clipsToBounds = false
 
-        let content: UIView
-        switch style {
-        case .me:
-            content = Self.buildMeMarker(
-                label: flutter.dopinMarkerLabel ?? "Me",
-                primary: flutter.dopinPrimaryColor,
-                second: flutter.dopinSecondPrimaryColor
-            )
-        case .event:
-            content = Self.buildEventMarker(borderColor: flutter.dopinBorderColor)
-        case .dopin:
-            content = Self.buildDopinMarker(borderColor: flutter.dopinBorderColor)
-        case .cluster:
-            content = Self.buildClusterMarker(
-                count: flutter.dopinClusterCount,
-                primary: flutter.dopinBorderColor,
-                second: flutter.dopinSecondPrimaryColor
-            )
-        }
+        let content = Self.buildDopinMarker(annotation: flutter)
         content.tag = Self.contentTag
         addSubview(content)
 
@@ -359,164 +340,55 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         return nil
     }
 
-    private static func buildMeMarker(label: String, primary: UIColor, second: UIColor) -> UIView {
-        let w: CGFloat = 46
-        let h: CGFloat = 54
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: w, height: h))
+    private static func buildDopinMarker(annotation: FlutterAnnotation) -> UIView {
+        let frameW = annotation.dopinFrameWidth
+        let frameH = annotation.dopinFrameHeight
+        let border = annotation.dopinBorderWidth
+        let outerRadius = annotation.dopinBorderRadius ?? min(frameW, frameH) / 2
+        let innerRadius = max(0, outerRadius - border)
 
-        let outer = UIView(frame: CGRect(x: 3, y: 0, width: 40, height: 46))
-        outer.backgroundColor = .white
-        outer.layer.cornerRadius = 15
-        outer.clipsToBounds = true
+        let labelText = annotation.dopinMarkerLabel ?? ""
+        let hasLabel = !labelText.isEmpty
+        let badgeH = annotation.dopinBadgeHeight
+        let badgeOverlap: CGFloat = 8
+        let totalW = frameW
+        let totalH = hasLabel ? frameH + badgeH - badgeOverlap : frameH
 
-        let pad: CGFloat = 3
-        let avatarFrame = CGRect(x: pad, y: pad, width: 40 - pad * 2, height: 40 - pad * 2)
-        let avatarWrap = UIView(frame: avatarFrame)
-        avatarWrap.layer.cornerRadius = 12
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: totalW, height: totalH))
+
+        let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
+        frameView.backgroundColor = annotation.dopinBorderColor
+        frameView.layer.cornerRadius = outerRadius
+        frameView.clipsToBounds = true
+
+        let avatarSide = max(0, min(frameW, frameH) - border * 2)
+        let avatarWrap = UIView(frame: CGRect(x: 0, y: 0, width: avatarSide, height: avatarSide))
+        avatarWrap.layer.cornerRadius = innerRadius
         avatarWrap.clipsToBounds = true
-        avatarWrap.center = CGPoint(x: outer.bounds.midX, y: outer.bounds.midY - 2)
+        avatarWrap.center = CGPoint(x: frameView.bounds.midX, y: frameView.bounds.midY)
         let avatar = UIImageView(frame: avatarWrap.bounds)
         avatar.tag = imageTag
         avatar.contentMode = .scaleAspectFill
         avatar.backgroundColor = UIColor(white: 0.92, alpha: 1)
         avatarWrap.addSubview(avatar)
-        outer.addSubview(avatarWrap)
-        container.addSubview(outer)
+        frameView.addSubview(avatarWrap)
+        container.addSubview(frameView)
 
-        let badge = UIView(frame: CGRect(x: 0, y: h - 20, width: w, height: 20))
-        badge.backgroundColor = .white
-        badge.layer.cornerRadius = 10
-        badge.clipsToBounds = true
-        let badgeLabel = UILabel(frame: badge.bounds.insetBy(dx: 4, dy: 2))
-        badgeLabel.text = label
-        badgeLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        badgeLabel.textAlignment = .center
-        badgeLabel.textColor = primary
-        badge.addSubview(badgeLabel)
-        Self.applyGradientText(to: badgeLabel, colors: [primary, second])
-        container.addSubview(badge)
+        if hasLabel {
+            let badge = UIView(frame: CGRect(x: 0, y: totalH - badgeH, width: totalW, height: badgeH))
+            badge.backgroundColor = .white
+            badge.layer.cornerRadius = badgeH / 2
+            badge.clipsToBounds = true
+            let badgeLabel = UILabel(frame: badge.bounds.insetBy(dx: 4, dy: 2))
+            badgeLabel.text = labelText
+            badgeLabel.font = .systemFont(ofSize: annotation.dopinLabelFontSize, weight: .semibold)
+            badgeLabel.textAlignment = .center
+            badgeLabel.textColor = annotation.dopinLabelColor
+            badge.addSubview(badgeLabel)
+            container.addSubview(badge)
+        }
 
-        container.bounds = CGRect(origin: .zero, size: CGSize(width: w, height: h))
-        return container
-    }
-
-    private static func applyGradientText(to label: UILabel, colors: [UIColor]) {
-        label.layoutIfNeeded()
-        let gradient = CAGradientLayer()
-        gradient.colors = colors.map { $0.cgColor }
-        gradient.startPoint = CGPoint(x: 0, y: 0.5)
-        gradient.endPoint = CGPoint(x: 1, y: 0.5)
-        gradient.frame = label.bounds
-        let text = CATextLayer()
-        text.string = label.text
-        text.font = label.font
-        text.fontSize = label.font.pointSize
-        text.alignmentMode = .center
-        text.frame = label.bounds
-        text.contentsScale = UIScreen.main.scale
-        gradient.mask = text
-        label.layer.addSublayer(gradient)
-        label.textColor = .clear
-    }
-
-    private static func buildEventMarker(borderColor: UIColor) -> UIView {
-        let side: CGFloat = 40
-        let shadowPad: CGFloat = 12
-        let total = side + shadowPad * 2
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: total, height: total))
-        container.backgroundColor = .clear
-
-        let shadowHost = UIView(frame: CGRect(x: shadowPad, y: shadowPad, width: side, height: side))
-        shadowHost.layer.shadowColor = UIColor.black.cgColor
-        shadowHost.layer.shadowOpacity = 0.25
-        shadowHost.layer.shadowRadius = 13
-        shadowHost.layer.shadowOffset = CGSize(width: 0, height: 4)
-        shadowHost.backgroundColor = .clear
-
-        let ring = UIView(frame: shadowHost.bounds)
-        ring.backgroundColor = borderColor
-        ring.layer.cornerRadius = side / 2
-        ring.clipsToBounds = true
-
-        let image = UIImageView(frame: ring.bounds.insetBy(dx: 2, dy: 2))
-        image.tag = imageTag
-        image.layer.cornerRadius = (side - 4) / 2
-        image.clipsToBounds = true
-        image.contentMode = .scaleAspectFill
-        image.backgroundColor = UIColor(white: 0.9, alpha: 1)
-        ring.addSubview(image)
-        shadowHost.addSubview(ring)
-        container.addSubview(shadowHost)
-
-        container.bounds = CGRect(origin: .zero, size: CGSize(width: total, height: total))
-        return container
-    }
-
-    private static func buildDopinMarker(borderColor: UIColor) -> UIView {
-        let side: CGFloat = 43
-        let pad: CGFloat = 10
-        let total = side + pad * 2
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: total, height: total))
-
-        let shadowHost = UIView(frame: CGRect(x: pad, y: pad, width: side, height: side))
-        shadowHost.layer.shadowColor = UIColor.black.cgColor
-        shadowHost.layer.shadowOpacity = 0.15
-        shadowHost.layer.shadowRadius = 9
-        shadowHost.layer.shadowOffset = .zero
-
-        let border = UIView(frame: shadowHost.bounds)
-        border.backgroundColor = borderColor
-        border.layer.cornerRadius = 12
-        border.clipsToBounds = true
-
-        let image = UIImageView(frame: border.bounds.insetBy(dx: 3, dy: 3))
-        image.tag = imageTag
-        image.layer.cornerRadius = 9
-        image.clipsToBounds = true
-        image.contentMode = .scaleAspectFill
-        image.backgroundColor = UIColor(white: 0.9, alpha: 1)
-        border.addSubview(image)
-        shadowHost.addSubview(border)
-        container.addSubview(shadowHost)
-
-        container.bounds = CGRect(origin: .zero, size: CGSize(width: total, height: total))
-        return container
-    }
-
-    private static func buildClusterMarker(count: Int, primary: UIColor, second: UIColor) -> UIView {
-        let outer: CGFloat = 72
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: outer, height: outer))
-
-        let shell = UIView(frame: container.bounds)
-        shell.backgroundColor = .white
-        shell.layer.cornerRadius = outer / 2
-
-        let ring = UIView(frame: shell.bounds.insetBy(dx: 6, dy: 6))
-        ring.layer.cornerRadius = ring.bounds.width / 2
-        ring.clipsToBounds = true
-        let gradient = CAGradientLayer()
-        gradient.colors = [primary.cgColor, second.cgColor]
-        gradient.startPoint = CGPoint(x: 0, y: 0.5)
-        gradient.endPoint = CGPoint(x: 1, y: 0.5)
-        gradient.frame = ring.bounds
-        ring.layer.insertSublayer(gradient, at: 0)
-
-        let inner = UIView(frame: ring.bounds.insetBy(dx: 4, dy: 4))
-        inner.backgroundColor = .white
-        inner.layer.cornerRadius = inner.bounds.width / 2
-
-        let label = UILabel(frame: inner.bounds)
-        label.text = count > 9 ? "9+" : "\(count)"
-        label.font = .systemFont(ofSize: 28, weight: .semibold)
-        label.textAlignment = .center
-        label.textColor = .black
-        inner.addSubview(label)
-
-        ring.addSubview(inner)
-        shell.addSubview(ring)
-        container.addSubview(shell)
-
-        container.bounds = CGRect(origin: .zero, size: CGSize(width: outer, height: outer))
+        container.bounds = CGRect(origin: .zero, size: CGSize(width: totalW, height: totalH))
         return container
     }
 }

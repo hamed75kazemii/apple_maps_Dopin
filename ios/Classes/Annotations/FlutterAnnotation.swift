@@ -9,10 +9,6 @@ import Foundation
 import MapKit
 import UIKit
 
-enum DopinMarkerStyle: String {
-    case me, event, dopin, cluster
-}
-
 class FlutterAnnotation: NSObject, MKAnnotation {
     @objc dynamic var coordinate: CLLocationCoordinate2D
     var id: String!
@@ -34,22 +30,27 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var glowColorArgb: UInt32 = 0xFF_EC30E4
     var glowIntensity: Double = 1.0
 
-    var dopinMarkerStyle: DopinMarkerStyle?
+    var usesDopinMarker: Bool = false
     var dopinImageUrl: String?
     var dopinImagePngData: Data?
     var dopinImageAssetName: String?
     var dopinImageAssetScale: CGFloat = 1.0
     var dopinMarkerLabel: String?
-    var dopinClusterCount: Int = 1
-    var dopinPrimaryColor: UIColor = UIColor(red: 123/255, green: 44/255, blue: 191/255, alpha: 1)
-    var dopinSecondPrimaryColor: UIColor = UIColor(red: 236/255, green: 48/255, blue: 228/255, alpha: 1)
+    var dopinFrameWidth: CGFloat = 40
+    var dopinFrameHeight: CGFloat = 40
+    var dopinBorderWidth: CGFloat = 2
     var dopinBorderColor: UIColor = .white
+    /// `nil` = draw as circle on native side.
+    var dopinBorderRadius: CGFloat?
+    var dopinLabelFontSize: CGFloat = 10
+    var dopinBadgeHeight: CGFloat = 18
+    var dopinLabelColor: UIColor = UIColor(red: 123/255, green: 44/255, blue: 191/255, alpha: 1)
 
     var dopinMarkerSignature: String {
-        let style = dopinMarkerStyle?.rawValue ?? ""
         let pngLen = dopinImagePngData?.count ?? 0
         let asset = dopinImageAssetName ?? ""
-        return "\(style)|\(dopinImageUrl ?? "")|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinClusterCount)|\(dopinPrimaryColor)|\(dopinSecondPrimaryColor)|\(dopinBorderColor)"
+        let radius = dopinBorderRadius.map { "\($0)" } ?? "circle"
+        return "\(dopinImageUrl ?? "")|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)"
     }
 
     public init(fromDictionary annotationData: Dictionary<String, Any>, registrar: FlutterPluginRegistrar) {
@@ -99,9 +100,8 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         }
 
         if let dopin = annotationData["dopinMarker"] as? Dictionary<String, Any> {
-            if let styleName = dopin["style"] as? String {
-                self.dopinMarkerStyle = DopinMarkerStyle(rawValue: styleName)
-            }
+            self.usesDopinMarker = true
+            let layout = dopin["layout"] as? Dictionary<String, Any>
             self.dopinImageUrl = dopin["imageUrl"] as? String
             if let png = dopin["imagePng"] as? FlutterStandardTypedData {
                 self.dopinImagePngData = png.data
@@ -111,28 +111,45 @@ class FlutterAnnotation: NSObject, MKAnnotation {
                 self.dopinImageAssetScale = CGFloat(assetData[1] as? Double ?? 1.0)
                 self.dopinImageAssetName = registrar.lookupKey(forAsset: assetPath)
             }
-            self.dopinMarkerLabel = dopin["label"] as? String
-            if let count = dopin["clusterCount"] as? Int {
-                self.dopinClusterCount = count
-            } else if let count = dopin["clusterCount"] as? NSNumber {
-                self.dopinClusterCount = count.intValue
+            if let label = dopin["label"] as? String {
+                let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.dopinMarkerLabel = trimmed.isEmpty ? nil : trimmed
             }
-            if let primary = dopin["primaryColor"] as? NSNumber {
-                self.dopinPrimaryColor = Self.uiColorFromArgb(primary.uint32Value)
-            } else if let primary = dopin["primaryColor"] as? Int {
-                self.dopinPrimaryColor = Self.uiColorFromArgb(UInt32(primary))
+            if let w = Self.cg(dopin["width"]) ?? Self.cg(layout?["width"]) ?? Self.cg(layout?["innerWidth"]) {
+                self.dopinFrameWidth = w
             }
-            if let second = dopin["secondPrimaryColor"] as? NSNumber {
-                self.dopinSecondPrimaryColor = Self.uiColorFromArgb(second.uint32Value)
-            } else if let second = dopin["secondPrimaryColor"] as? Int {
-                self.dopinSecondPrimaryColor = Self.uiColorFromArgb(UInt32(second))
+            if let h = Self.cg(dopin["height"]) ?? Self.cg(layout?["height"]) ?? Self.cg(layout?["innerHeight"]) {
+                self.dopinFrameHeight = h
+            }
+            if let bw = Self.cg(dopin["borderWidth"]) ?? Self.cg(layout?["borderWidth"]) {
+                self.dopinBorderWidth = bw
+            }
+            if let br = Self.cg(dopin["borderRadius"]) ?? Self.cg(layout?["borderRadius"]) {
+                self.dopinBorderRadius = br
             }
             if let border = dopin["borderColor"] as? NSNumber {
                 self.dopinBorderColor = Self.uiColorFromArgb(border.uint32Value)
             } else if let border = dopin["borderColor"] as? Int {
                 self.dopinBorderColor = Self.uiColorFromArgb(UInt32(border))
             }
+            if let lc = dopin["labelColor"] as? NSNumber {
+                self.dopinLabelColor = Self.uiColorFromArgb(lc.uint32Value)
+            } else if let lc = dopin["labelColor"] as? Int {
+                self.dopinLabelColor = Self.uiColorFromArgb(UInt32(lc))
+            }
+            if let lfs = Self.cg(dopin["labelFontSize"]) ?? Self.cg(layout?["labelFontSize"]) {
+                self.dopinLabelFontSize = lfs
+            }
+            if let bh = Self.cg(dopin["badgeHeight"]) ?? Self.cg(layout?["badgeHeight"]) {
+                self.dopinBadgeHeight = bh
+            }
         }
+    }
+
+    private static func cg(_ value: Any?) -> CGFloat? {
+        if let d = value as? Double { return CGFloat(d) }
+        if let n = value as? NSNumber { return CGFloat(n.doubleValue) }
+        return nil
     }
 
     private static func uiColorFromArgb(_ value: UInt32) -> UIColor {
@@ -164,7 +181,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
     
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
-        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.dopinMarkerStyle == rhs.dopinMarkerStyle && lhs.dopinImageUrl == rhs.dopinImageUrl && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinClusterCount == rhs.dopinClusterCount && lhs.dopinPrimaryColor == rhs.dopinPrimaryColor && lhs.dopinSecondPrimaryColor == rhs.dopinSecondPrimaryColor && lhs.dopinBorderColor == rhs.dopinBorderColor
+        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrl == rhs.dopinImageUrl && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor
     }
     
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
