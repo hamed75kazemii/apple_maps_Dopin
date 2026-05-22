@@ -7,8 +7,9 @@ part of apple_maps_flutter;
 /// Details of a built-in Apple Maps Point Of Interest (POI) that was tapped
 /// by the user.
 ///
-/// POI tap detection requires iOS 17+ at runtime; on older iOS versions the
-/// plugin silently does nothing and [AppleMap.onPOITap] will never fire.
+/// POI tap detection requires iOS 17+ at runtime and a non-null
+/// [AppleMap.onPOITap] handler; on older iOS versions the plugin silently does
+/// nothing, and without a handler built-in POI labels are not selectable.
 ///
 /// This mirrors `TapInteraction(StandardPOIs())` from Mapbox: it surfaces the
 /// taps the user makes on Apple Maps' own labelled points of interest (cafes,

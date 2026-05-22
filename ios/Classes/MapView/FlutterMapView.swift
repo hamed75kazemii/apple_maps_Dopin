@@ -20,6 +20,8 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     var oldBounds: CGRect?
     var options: Dictionary<String, Any>?
     var isMyLocationButtonShowing: Bool? = false
+    /// Mirrors Flutter `onPOITap != null`; when false, built-in POIs are not selectable.
+    var isPOITapEnabled: Bool = false
     
     fileprivate let locationManager: CLLocationManager = CLLocationManager()
     
@@ -40,14 +42,19 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         self.channel = channel
         self.options = options
         initialiseTapGestureRecognizers()
-        enableSelectableMapFeatures()
+        self.applyPOITapInteraction(enabled: Self.poiTapEnabled(from: options))
     }
 
-    /// Enables native selection for Apple Maps built-in POIs on iOS 17+.
-    /// On older versions this is silently a no-op, matching backward-compat goals.
-    private func enableSelectableMapFeatures() {
+    private static func poiTapEnabled(from options: Dictionary<String, Any>?) -> Bool {
+        return options?["poiTapEnabled"] as? Bool ?? false
+    }
+
+    /// Enables or disables native selection for Apple Maps built-in POIs on iOS 17+.
+    /// On older versions this is silently a no-op.
+    func applyPOITapInteraction(enabled: Bool) {
+        self.isPOITapEnabled = enabled
         if #available(iOS 17.0, *) {
-            self.selectableMapFeatures = [.pointsOfInterest]
+            self.selectableMapFeatures = enabled ? [.pointsOfInterest] : []
         }
     }
     
@@ -83,7 +90,6 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             if self.options != nil {
                 self.interpretOptions(options: self.options!)
             }
-            enableSelectableMapFeatures()
             if #available(iOS 9.0, *) {
                 setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: zoomLevel, animated: false)
                 mapContainerView = self.findViewOfType("MKScrollContainerView", inView: self)
@@ -209,6 +215,10 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             if #available(iOS 11.0, *) {
                 self.insetsLayoutMarginsFromSafeArea = insetsSafeArea
             }
+        }
+
+        if let poiTapEnabled: Bool = options["poiTapEnabled"] as? Bool {
+            self.applyPOITapInteraction(enabled: poiTapEnabled)
         }
 
     }

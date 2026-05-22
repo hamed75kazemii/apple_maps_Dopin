@@ -43,6 +43,8 @@ class FakePlatformAppleMap {
 
   bool? myLocationButtonEnabled;
 
+  bool? poiTapEnabled;
+
   Set<AnnotationId>? annotationIdsToRemove;
 
   Set<Annotation>? annotationsToAdd;
@@ -301,6 +303,9 @@ class FakePlatformAppleMap {
     }
     if (options.containsKey('myLocationButtonEnabled')) {
       myLocationButtonEnabled = options['myLocationButtonEnabled'];
+    }
+    if (options.containsKey('poiTapEnabled')) {
+      poiTapEnabled = options['poiTapEnabled'];
     }
   }
 }

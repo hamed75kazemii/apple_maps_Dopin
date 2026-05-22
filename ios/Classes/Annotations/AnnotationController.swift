@@ -55,6 +55,9 @@ extension AppleMapController: AnnotationDelegate {
 
     @available(iOS 17.0, *)
     private func handlePOISelectionIfNeeded(_ annotation: MKAnnotation?) {
+        guard self.mapView.isPOITapEnabled else {
+            return
+        }
         guard let feature = annotation as? MKMapFeatureAnnotation else {
             return
         }

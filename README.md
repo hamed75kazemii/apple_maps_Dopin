@@ -27,8 +27,10 @@ There is no Android implementation, but there is a package combining apple_maps_
 Apple Maps renders its own labelled Points Of Interest (cafes, shops, transit
 stops, …). On iOS 17 and newer this plugin exposes taps on those built-in POIs
 through the `onPOITap` callback — the Apple Maps analogue of Mapbox's
-`TapInteraction(StandardPOIs())`. On older iOS versions the callback is simply
-never invoked and the rest of the map behaves unchanged.
+`TapInteraction(StandardPOIs())`. POI selection is only enabled while
+`onPOITap` is set; omit the callback to keep built-in POI labels non-interactive.
+On older iOS versions the callback is simply never invoked and the rest of the
+map behaves unchanged.
 
 ```dart
 AppleMap(

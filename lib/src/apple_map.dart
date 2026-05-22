@@ -138,6 +138,10 @@ class AppleMap extends StatefulWidget {
   /// POI tap detection is only available on iOS 17 or newer; on older
   /// versions the callback will never be invoked.
   ///
+  /// When this callback is `null`, built-in POI labels are not selectable on
+  /// the map (user interaction is disabled). Assign a handler to enable POI
+  /// taps.
+  ///
   /// The [ApplePOIDetail] payload includes the POI's coordinate plus an
   /// optional name and category when MapKit makes them available.
   final ApplePOITapCallback? onPOITap;
@@ -370,6 +374,7 @@ class _AppleMapOptions {
     this.myLocationButtonEnabled,
     this.padding,
     this.insetsLayoutMarginsFromSafeArea,
+    this.poiTapEnabled,
   });
 
   static _AppleMapOptions fromWidget(AppleMap map) {
@@ -387,6 +392,7 @@ class _AppleMapOptions {
       myLocationButtonEnabled: map.myLocationButtonEnabled,
       padding: map.padding,
       insetsLayoutMarginsFromSafeArea: map.insetsLayoutMarginsFromSafeArea,
+      poiTapEnabled: map.onPOITap != null,
     );
   }
 
@@ -416,6 +422,9 @@ class _AppleMapOptions {
 
   final bool? insetsLayoutMarginsFromSafeArea;
 
+  /// Whether built-in Apple Maps POI labels should accept user taps (iOS 17+).
+  final bool? poiTapEnabled;
+
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> optionsMap = <String, dynamic>{};
 
@@ -439,6 +448,7 @@ class _AppleMapOptions {
     addIfNonNull('padding', _serializePadding(padding));
     addIfNonNull(
         'insetsLayoutMarginsFromSafeArea', insetsLayoutMarginsFromSafeArea);
+    addIfNonNull('poiTapEnabled', poiTapEnabled);
     return optionsMap;
   }
 
