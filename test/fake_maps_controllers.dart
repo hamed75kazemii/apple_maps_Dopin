@@ -281,6 +281,7 @@ class FakePlatformAppleMap {
     if (options.containsKey('mapType')) {
       mapType = MapType.values[options['mapType']];
     }
+    // globeAtMinZoom is handled on iOS only; ignored in tests.
     if (options.containsKey('minMaxZoomPreference')) {
       final List<dynamic> minMaxZoomList = options['minMaxZoomPreference'];
       minMaxZoomPreference =

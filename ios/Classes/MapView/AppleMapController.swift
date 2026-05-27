@@ -283,6 +283,7 @@ extension AppleMapController: MKMapViewDelegate {
     // onIdle
     public func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
         if ((self.mapView.mapContainerView) != nil) {
+            self.mapView.updateGlobeTransitionIfNeeded()
             let locationOnMap = self.mapView.region.center
             self.channel.invokeMethod("camera#onMove", arguments: ["position": ["heading": self.mapView.actualHeading, "target":  [locationOnMap.latitude, locationOnMap.longitude], "pitch": self.mapView.camera.pitch, "zoom": self.mapView.calculatedZoomLevel]])
         }

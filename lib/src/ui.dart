@@ -6,7 +6,7 @@ part of apple_maps_flutter;
 
 /// Type of map tiles to display.
 enum MapType {
-  /// Normal tiles (traffic and labels, subtle terrain information).
+  /// Normal street map. Stays flat when zoomed out (MapKit has no standard globe).
   standard,
 
   /// Satellite imaging tiles (aerial photos)
@@ -14,6 +14,13 @@ enum MapType {
 
   /// Hybrid tiles (satellite images with some labels/overlays)
   hybrid,
+
+  /// 3D satellite globe when zoomed out (spherical, aerial imagery).
+  satelliteFlyover,
+
+  /// 3D globe when zoomed out; street names and POIs when zoomed in.
+  /// Closest to Apple Maps globe — use this instead of [standard] for a round earth.
+  hybridFlyover,
 }
 
 enum TrackingMode {

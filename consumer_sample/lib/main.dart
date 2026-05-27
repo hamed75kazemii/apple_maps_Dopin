@@ -41,10 +41,9 @@ class MapSmokeTestScreen extends StatefulWidget {
 
 class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   AppleMapController? _controller;
-  String _status = 'روی مارکرها بزنید — مارکر Dopin';
+  String _status = 'Tap on markers';
   ApplePOIDetail? _selectedPoi;
   String? _lastTappedMarkerId;
-
   static const CameraPosition _losAngeles = CameraPosition(
     target: LatLng(34.0522, -118.2437),
     zoom: 12,
@@ -75,12 +74,12 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       if (mounted) {
         setState(() {
           _eventPng = bytes;
-          _status = 'مارکر PNG لود شد';
+          _status = 'PNG loaded';
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _status = 'خطا در لود PNG: $e');
+        setState(() => _status = 'Error loading PNG: $e');
       }
     }
   }
@@ -102,55 +101,56 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
         labelColor: _labelColor,
       ),
     ),
-    Annotation(
-      annotationId: const AnnotationId('marker_circle'),
-      position: const LatLng(34.0622, -118.2437),
-      onTap: () => _onMarkerTap('marker_circle'),
-      dopinMarker: DopinMarker.withPng(
-        imagePng: _eventPng ?? Uint8List(0),
-        width: 40,
-        height: 40,
-        borderWidth: 2,
-        borderColor: Colors.white,
-      ),
-    ),
-    Annotation(
-      annotationId: const AnnotationId('marker_dopin'),
-      position: const LatLng(34.0422, -118.2537),
-      onTap: () => _onMarkerTap('marker_dopin'),
-      dopinMarker: const DopinMarker(
-        imageUrl: _demoAvatarUrl,
-        width: 43,
-        height: 43,
-        borderWidth: 2,
-        borderColor: Color(0xFFEC30E4),
-        borderRadius: 12,
-      ),
-    ),
-    Annotation(
-      annotationId: const AnnotationId('marker_count'),
-      position: const LatLng(34.0522, -118.2637),
-      anchor: const Offset(0.5, 0.5),
-      onTap: () => _onMarkerTap('marker_count'),
 
-      dopinMarker: const DopinMarker(
-        label: '12',
-        width: 56,
-        height: 56,
-        borderWidth: 3,
-        borderColor: Color(0xFFEC30E4),
-        labelFontSize: 22,
-        badgeHeight: 22,
-        labelColor: _labelColor,
-      ),
-    ),
+    // Annotation(
+    //   annotationId: const AnnotationId('marker_circle'),
+    //   position: const LatLng(34.0622, -118.2437),
+    //   onTap: () => _onMarkerTap('marker_circle'),
+    //   dopinMarker: DopinMarker.withPng(
+    //     imagePng: _eventPng ?? Uint8List(0),
+    //     width: 40,
+    //     height: 40,
+    //     borderWidth: 2,
+    //     borderColor: Colors.white,
+    //   ),
+    // ),
+    // Annotation(
+    //   annotationId: const AnnotationId('marker_dopin'),
+    //   position: const LatLng(34.0422, -118.2537),
+    //   onTap: () => _onMarkerTap('marker_dopin'),
+    //   dopinMarker: const DopinMarker(
+    //     imageUrl: _demoAvatarUrl,
+    //     width: 43,
+    //     height: 43,
+    //     borderWidth: 2,
+    //     borderColor: Color(0xFFEC30E4),
+    //     borderRadius: 12,
+    //   ),
+    // ),
+    // Annotation(
+    //   annotationId: const AnnotationId('marker_count'),
+    //   position: const LatLng(34.0522, -118.2637),
+    //   anchor: const Offset(0.5, 0.5),
+    //   onTap: () => _onMarkerTap('marker_count'),
+
+    //   dopinMarker: const DopinMarker(
+    //     label: '12',
+    //     width: 56,
+    //     height: 56,
+    //     borderWidth: 3,
+    //     borderColor: Color(0xFFEC30E4),
+    //     labelFontSize: 22,
+    //     badgeHeight: 22,
+    //     labelColor: _labelColor,
+    //   ),
+    // ),
   };
 
   void _onMarkerTap(String id) {
     log('onMarkerTap: $id');
     setState(() {
       _lastTappedMarkerId = id;
-      _status = 'کلیک مارکر: $id';
+      _status = 'Marker tapped: $id';
       _selectedPoi = null;
     });
   }
@@ -159,12 +159,12 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   Widget build(BuildContext context) {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Apple Maps — تست فورک')),
+        appBar: AppBar(title: const Text('Apple Maps')),
         body: const Center(
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'این پلاگین برای نمایش Apple Map روی iOS طراحی شده است.\n'
+              'This plugin is designed to display Apple Maps on iOS.\n'
               'روی شبیه‌ساز یا دستگاه iOS اجرا کنید.',
               textAlign: TextAlign.center,
             ),
@@ -175,10 +175,10 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Apple Maps — مارکر Dopin'),
+        title: const Text('Apple Maps'),
         actions: [
           IconButton(
-            tooltip: 'مرکز روی لس‌آنجلس',
+            tooltip: 'Center on Los Angeles',
             onPressed: _controller == null
                 ? null
                 : () async {
@@ -215,6 +215,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
           Expanded(
             child: AppleMap(
               initialCameraPosition: _losAngeles,
+              mapType: MapType.standard,
+              globeAtMinZoom: true,
+              minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
               onMapCreated: (AppleMapController controller) {
                 setState(() => _controller = controller);
               },
@@ -313,7 +316,7 @@ class _PoiInfoCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    poi.name ?? 'بدون نام',
+                    poi.name ?? 'No name',
                     style: Theme.of(context).textTheme.titleMedium,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

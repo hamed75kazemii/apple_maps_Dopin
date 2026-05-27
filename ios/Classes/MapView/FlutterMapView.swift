@@ -29,7 +29,25 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         MKMapType.standard,
         MKMapType.satellite,
         MKMapType.hybrid,
+        MKMapType.satelliteFlyover,
+        MKMapType.hybridFlyover,
     ]
+
+    /// When true, low zoom levels use a wide region so MapKit renders the 3D globe.
+    var prefersGlobeProjection: Bool = false
+
+    /// Flutter [AppleMap.globeAtMinZoom]: auto standard ↔ hybrid flyover by zoom.
+    var globeAtMinZoom: Bool = false
+
+    /// Map type index requested from Flutter ([MapType] enum).
+    var userRequestedMapTypeIndex: Int = 0
+
+    private var isAutoGlobeActive: Bool = false
+
+    private static let globeZoomThreshold: Double = 2.5
+    private static let standardZoomThreshold: Double = 3.5
+    private static let standardMapTypeIndex: Int = 0
+    private static let hybridFlyoverMapTypeIndex: Int = 4
     
     let userTrackingModes: Array<MKUserTrackingMode> = [
         MKUserTrackingMode.none,
@@ -43,6 +61,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         self.options = options
         initialiseTapGestureRecognizers()
         self.applyPOITapInteraction(enabled: Self.poiTapEnabled(from: options))
+        self.interpretOptions(options: options)
     }
 
     private static func poiTapEnabled(from options: Dictionary<String, Any>?) -> Bool {
@@ -157,8 +176,21 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             self.layoutMargins = margins
         }
         
+        if let globeAtMinZoom: Bool = options["globeAtMinZoom"] as? Bool {
+            self.globeAtMinZoom = globeAtMinZoom
+            if !globeAtMinZoom {
+                isAutoGlobeActive = false
+            }
+        }
+
         if let mapType: Int = options["mapType"] as? Int {
-            self.mapType = self.mapTypes[mapType]
+            userRequestedMapTypeIndex = mapType
+            if mapType != FlutterMapView.standardMapTypeIndex {
+                isAutoGlobeActive = false
+                applyMapType(index: mapType)
+            } else if !isAutoGlobeActive {
+                applyMapType(index: mapType)
+            }
         }
         
         if let trafficEnabled: Bool = options["trafficEnabled"] as? Bool {
@@ -334,7 +366,60 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         let pitch = self.camera.pitch
         let heading = self.actualHeading
         self.updateCameraValues()
+        updateGlobeTransitionIfNeeded()
         channel?.invokeMethod("camera#onMove", arguments: ["position": ["heading": heading, "target":  [locationOnMap.latitude, locationOnMap.longitude], "pitch": pitch, "zoom": zoom]])
+    }
+
+    /// Applies a [MapType] index to MapKit (configuration API on iOS 16+, legacy mapType below).
+    func applyMapType(index: Int) {
+        prefersGlobeProjection = index >= 3
+        if #available(iOS 16.0, *) {
+            switch index {
+            case 0:
+                preferredConfiguration = MKStandardMapConfiguration()
+            case 1:
+                preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .flat)
+            case 2:
+                preferredConfiguration = MKHybridMapConfiguration(elevationStyle: .flat)
+            case 3:
+                preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .realistic)
+            case 4:
+                preferredConfiguration = MKHybridMapConfiguration(elevationStyle: .realistic)
+            default:
+                break
+            }
+        } else if index < mapTypes.count {
+            self.mapType = mapTypes[index]
+        }
+    }
+
+    /// When [globeAtMinZoom] is enabled with standard map, switch to hybrid flyover at min zoom.
+    func updateGlobeTransitionIfNeeded() {
+        guard globeAtMinZoom else { return }
+        guard userRequestedMapTypeIndex == FlutterMapView.standardMapTypeIndex else { return }
+
+        let zoom = calculatedZoomLevel
+
+        if zoom <= FlutterMapView.globeZoomThreshold && !isAutoGlobeActive {
+            isAutoGlobeActive = true
+            applyMapType(index: FlutterMapView.hybridFlyoverMapTypeIndex)
+            if zoom <= 2 {
+                refreshGlobeProjection()
+            }
+        } else if zoom >= FlutterMapView.standardZoomThreshold && isAutoGlobeActive {
+            isAutoGlobeActive = false
+            applyMapType(index: FlutterMapView.standardMapTypeIndex)
+        }
+    }
+
+    private func refreshGlobeProjection() {
+        if #available(iOS 9.0, *) {
+            setCenterCoordinateWithAltitude(
+                centerCoordinate: centerCoordinate,
+                zoomLevel: calculatedZoomLevel,
+                animated: false
+            )
+        }
     }
 
     @objc func longTap(sender: UIGestureRecognizer){

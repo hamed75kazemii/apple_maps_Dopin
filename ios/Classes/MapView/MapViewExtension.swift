@@ -167,6 +167,20 @@ public extension MKMapView {
     func setCenterCoordinateWithAltitude(centerCoordinate: CLLocationCoordinate2D, zoomLevel: Double, animated: Bool) {
         // clamp large numbers to 28
         let zoomL = min(zoomLevel, 28);
+
+        // Flyover / realistic imagery: use a wide region so the map shows a 3D globe.
+        let useGlobeRegion = (self as? FlutterMapView)?.prefersGlobeProjection == true && zoomL <= 2
+        if useGlobeRegion {
+            let span = MKCoordinateSpan(latitudeDelta: 180, longitudeDelta: 360)
+            let region = MKCoordinateRegion(center: centerCoordinate, span: span)
+            self.setRegion(region, animated: animated)
+            if !animated {
+                self.camera.pitch = Holder._pitch
+                self.camera.heading = Holder._heading
+            }
+            return
+        }
+
         let altitude = getCameraAltitude(centerCoordinate: centerCoordinate, zoomLevel: zoomL)
         self.setCamera(MKMapCamera(lookingAtCenter: centerCoordinate, fromDistance: CLLocationDistance(altitude), pitch: Holder._pitch, heading: Holder._heading), animated: animated)
     }
