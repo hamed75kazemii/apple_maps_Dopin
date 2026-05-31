@@ -304,6 +304,53 @@ public extension MKMapView {
         Holder._pitch = newPitch
         Holder._heading = newHeading
     }
+
+    /// Positions the camera for a single orbit frame: looks at `center` (optionally
+    /// offset so the focused point stays off-screen-center) with the given
+    /// `heading`/`pitch`/`zoomLevel`, without animation. Designed to be called
+    /// every frame from a `CADisplayLink` so the heading sweep is driven natively
+    /// instead of round-tripping through the Flutter method channel.
+    ///
+    /// `verticalScreenOffset` is expressed in screen points: a positive value
+    /// shifts the camera target opposite the heading so the orbit center appears
+    /// that many points above the screen center (mirrors the focus-padding
+    /// emulation previously done in Dart).
+    func setOrbitCamera(center: CLLocationCoordinate2D, zoomLevel: Double, pitch: CGFloat, heading: CLLocationDirection, verticalScreenOffset: Double) {
+        Holder._zoomLevel = zoomLevel
+        Holder._pitch = pitch
+        Holder._heading = heading
+
+        var targetCenter = center
+        if abs(verticalScreenOffset) > 0.5 {
+            let metersPerPixel = 156543.03392 * cos(center.latitude * .pi / 180.0) / pow(2.0, zoomLevel)
+            let offsetMeters = verticalScreenOffset * metersPerPixel
+            let offsetBearing = (heading + 180.0).truncatingRemainder(dividingBy: 360.0)
+            targetCenter = MKMapView.offsetCoordinate(center, distanceMeters: offsetMeters, bearingDegrees: offsetBearing)
+        }
+
+        if #available(iOS 9.0, *) {
+            let zoomL = min(zoomLevel, 28)
+            let altitude = getCameraAltitude(centerCoordinate: targetCenter, zoomLevel: zoomL)
+            let camera = MKMapCamera(lookingAtCenter: targetCenter, fromDistance: CLLocationDistance(altitude), pitch: pitch, heading: heading)
+            self.setCamera(camera, animated: false)
+        } else {
+            setCenterCoordinateRegion(centerCoordinate: targetCenter, zoomLevel: zoomLevel, animated: false)
+        }
+    }
+
+    /// Returns the coordinate reached by travelling `distanceMeters` along the
+    /// great-circle `bearingDegrees` (clockwise from north) from `coord`.
+    static func offsetCoordinate(_ coord: CLLocationCoordinate2D, distanceMeters: Double, bearingDegrees: Double) -> CLLocationCoordinate2D {
+        let earthRadius = 6378137.0
+        let bearing = bearingDegrees * .pi / 180.0
+        let angularDistance = distanceMeters / earthRadius
+        let lat1 = coord.latitude * .pi / 180.0
+        let lon1 = coord.longitude * .pi / 180.0
+        let lat2 = asin(sin(lat1) * cos(angularDistance) + cos(lat1) * sin(angularDistance) * cos(bearing))
+        let lon2 = lon1 + atan2(sin(bearing) * sin(angularDistance) * cos(lat1),
+                                cos(angularDistance) - sin(lat1) * sin(lat2))
+        return CLLocationCoordinate2D(latitude: lat2 * 180.0 / .pi, longitude: lon2 * 180.0 / .pi)
+    }
 }
 
 extension Array where Element == CLLocationCoordinate2D {

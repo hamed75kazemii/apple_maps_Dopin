@@ -214,6 +214,48 @@ class AppleMapController {
     });
   }
 
+  /// Starts a native, frame-rate-driven camera orbit around [center].
+  ///
+  /// The camera heading is swept by [degreesPerSecond] (positive = clockwise)
+  /// while [zoom] and [pitch] stay fixed, producing a smooth cinematic rotation
+  /// around the point. The sweep is driven by a `CADisplayLink` on the platform
+  /// side, so it does not round-trip through the method channel on every frame.
+  ///
+  /// [verticalScreenOffset] (in screen points) shifts the camera target opposite
+  /// the heading so that [center] appears that many points above the screen
+  /// center — useful when a bottom sheet or top bar covers part of the map and
+  /// the focused point should sit in the visible area.
+  ///
+  /// [startBearing] overrides the initial heading; when omitted the map's
+  /// current heading is used.
+  ///
+  /// Call [stopCameraOrbit] to end the orbit.
+  Future<void> startCameraOrbit({
+    required LatLng center,
+    required double zoom,
+    required double pitch,
+    double degreesPerSecond = 12.0,
+    double verticalScreenOffset = 0.0,
+    double? startBearing,
+  }) async {
+    await channel.invokeMethod<void>('camera#startOrbit', <String, dynamic>{
+      'center': <double>[center.latitude, center.longitude],
+      'zoom': zoom,
+      'pitch': pitch,
+      'degreesPerSecond': degreesPerSecond,
+      'verticalScreenOffset': verticalScreenOffset,
+      if (startBearing != null) 'startBearing': startBearing,
+    });
+  }
+
+  /// Stops a camera orbit previously started with [startCameraOrbit].
+  ///
+  /// A final `camera#onMove`/`camera#onIdle` event is emitted so the resting
+  /// camera position is reported back to Flutter.
+  Future<void> stopCameraOrbit() async {
+    await channel.invokeMethod<void>('camera#stopOrbit');
+  }
+
   /// Returns the current zoomLevel.
   Future<double?> getZoomLevel() async {
     return channel.invokeMethod<double>('camera#getZoomLevel');

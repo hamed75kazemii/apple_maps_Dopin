@@ -7,6 +7,7 @@
 
 import Foundation
 import MapKit
+import UIKit
 
 public class AppleMapController: NSObject, FlutterPlatformView {
     var contentView: UIView
@@ -18,6 +19,26 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     var currentlySelectedAnnotation: String?
     var snapShotOptions: MKMapSnapshotter.Options = MKMapSnapshotter.Options()
     var snapShot: MKMapSnapshotter?
+
+    // Native camera orbit driven by a CADisplayLink so the heading sweep runs at
+    // the display's frame rate without crossing the Flutter method channel.
+    private var orbitDisplayLink: CADisplayLink?
+    private var orbitCenter: CLLocationCoordinate2D = CLLocationCoordinate2D(latitude: 0, longitude: 0)
+    private var orbitHeading: Double = 0
+    private var orbitZoom: Double = 0
+    private var orbitPitch: CGFloat = 0
+    private var orbitDegreesPerSecond: Double = 0
+    private var orbitVerticalScreenOffset: Double = 0
+    private var orbitLastTimestamp: CFTimeInterval = 0
+
+    var isOrbiting: Bool {
+        return orbitDisplayLink != nil
+    }
+
+    deinit {
+        orbitDisplayLink?.invalidate()
+        orbitDisplayLink = nil
+    }
     
     public init(withFrame frame: CGRect, withRegistrar registrar: FlutterPluginRegistrar, withargs args: Dictionary<String, Any> ,withId id: Int64) {
         self.options = args["options"] as! [String: Any]
@@ -98,6 +119,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     self.moveCamera(args: args)
                     result(nil)
                     break
+                case "camera#startOrbit":
+                    self.startOrbit(args: args)
+                    result(nil)
+                    break
                 case "camera#convert":
                     self.cameraConvert(args: args, result: result)
                     break
@@ -141,6 +166,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     break
                 case "camera#getZoomLevel":
                     result(self.mapView.calculatedZoomLevel)
+                    break
+                case "camera#stopOrbit":
+                    self.stopOrbit()
+                    result(nil)
                     break
                 default:
                     result(FlutterMethodNotImplemented)
@@ -226,6 +255,80 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         }
     }
     
+    // MARK: - Native camera orbit
+
+    private func startOrbit(args: Dictionary<String, Any>) -> Void {
+        guard let centerList = args["center"] as? Array<Double>, centerList.count == 2 else { return }
+        self.invalidateOrbitDisplayLink()
+
+        self.orbitCenter = CLLocationCoordinate2D(latitude: centerList[0], longitude: centerList[1])
+        self.orbitZoom = args["zoom"] as? Double ?? self.mapView.zoomLevel
+        self.orbitPitch = CGFloat(args["pitch"] as? Double ?? Double(self.mapView.camera.pitch))
+        self.orbitDegreesPerSecond = args["degreesPerSecond"] as? Double ?? 12.0
+        self.orbitVerticalScreenOffset = args["verticalScreenOffset"] as? Double ?? 0.0
+        self.orbitHeading = args["startBearing"] as? Double ?? Double(self.mapView.actualHeading)
+
+        // Position the first frame immediately so there is no visible jump before
+        // the display link fires.
+        self.mapView.setOrbitCamera(
+            center: self.orbitCenter,
+            zoomLevel: self.orbitZoom,
+            pitch: self.orbitPitch,
+            heading: self.orbitHeading,
+            verticalScreenOffset: self.orbitVerticalScreenOffset
+        )
+
+        self.orbitLastTimestamp = 0
+        let link = CADisplayLink(target: self, selector: #selector(self.onOrbitTick(_:)))
+        link.add(to: .main, forMode: .common)
+        self.orbitDisplayLink = link
+    }
+
+    @objc private func onOrbitTick(_ link: CADisplayLink) -> Void {
+        // Seed the timestamp on the first tick so the very first delta is ~0.
+        if self.orbitLastTimestamp == 0 {
+            self.orbitLastTimestamp = link.timestamp
+            return
+        }
+        let dt = link.timestamp - self.orbitLastTimestamp
+        self.orbitLastTimestamp = link.timestamp
+
+        var heading = (self.orbitHeading + self.orbitDegreesPerSecond * dt).truncatingRemainder(dividingBy: 360.0)
+        if heading < 0 { heading += 360.0 }
+        self.orbitHeading = heading
+
+        self.mapView.setOrbitCamera(
+            center: self.orbitCenter,
+            zoomLevel: self.orbitZoom,
+            pitch: self.orbitPitch,
+            heading: self.orbitHeading,
+            verticalScreenOffset: self.orbitVerticalScreenOffset
+        )
+    }
+
+    private func invalidateOrbitDisplayLink() -> Void {
+        self.orbitDisplayLink?.invalidate()
+        self.orbitDisplayLink = nil
+        self.orbitLastTimestamp = 0
+    }
+
+    private func stopOrbit() -> Void {
+        let wasOrbiting = self.isOrbiting
+        self.invalidateOrbitDisplayLink()
+        guard wasOrbiting else { return }
+
+        // Push the final camera state back to Flutter so the Dart side's cached
+        // camera position stays in sync after the native sweep ends.
+        let center = self.mapView.region.center
+        self.channel.invokeMethod("camera#onMove", arguments: ["position": [
+            "heading": self.mapView.actualHeading,
+            "target": [center.latitude, center.longitude],
+            "pitch": self.mapView.camera.pitch,
+            "zoom": self.mapView.calculatedZoomLevel
+        ]])
+        self.channel.invokeMethod("camera#onIdle", arguments: "")
+    }
+
     private func cameraConvert(args: Dictionary<String, Any>, result: FlutterResult) -> Void {
         guard let annotation = args["annotation"] as? Array<Double> else {
             result(nil)
@@ -282,6 +385,14 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 extension AppleMapController: MKMapViewDelegate {
     // onIdle
     public func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        // While the native orbit is running we drive the camera every frame; emitting
+        // camera#onMove/onIdle here would flood the Flutter channel and defeat the
+        // whole point of moving the orbit off the Dart timer. stopOrbit() sends a
+        // single final position instead.
+        if self.isOrbiting {
+            self.mapView.updateGlobeTransitionIfNeeded()
+            return
+        }
         if ((self.mapView.mapContainerView) != nil) {
             self.mapView.updateGlobeTransitionIfNeeded()
             let locationOnMap = self.mapView.region.center
@@ -292,6 +403,7 @@ extension AppleMapController: MKMapViewDelegate {
     
     // onMoveStarted
     public func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+        if self.isOrbiting { return }
         self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
     }
     
