@@ -229,6 +229,11 @@ class AppleMapController {
   /// [startBearing] overrides the initial heading; when omitted the map's
   /// current heading is used.
   ///
+  /// When [pitchMin], [pitchMax] and [pitchPeriodSeconds] are provided (with
+  /// `pitchMax > pitchMin` and a positive period), the camera pitch oscillates
+  /// sinusoidally between the two angles over [pitchPeriodSeconds] while the
+  /// orbit runs, starting at [pitchMin]. Otherwise [pitch] stays fixed.
+  ///
   /// Call [stopCameraOrbit] to end the orbit.
   Future<void> startCameraOrbit({
     required LatLng center,
@@ -237,6 +242,9 @@ class AppleMapController {
     double degreesPerSecond = 12.0,
     double verticalScreenOffset = 0.0,
     double? startBearing,
+    double? pitchMin,
+    double? pitchMax,
+    double? pitchPeriodSeconds,
   }) async {
     await channel.invokeMethod<void>('camera#startOrbit', <String, dynamic>{
       'center': <double>[center.latitude, center.longitude],
@@ -245,6 +253,9 @@ class AppleMapController {
       'degreesPerSecond': degreesPerSecond,
       'verticalScreenOffset': verticalScreenOffset,
       if (startBearing != null) 'startBearing': startBearing,
+      if (pitchMin != null) 'pitchMin': pitchMin,
+      if (pitchMax != null) 'pitchMax': pitchMax,
+      if (pitchPeriodSeconds != null) 'pitchPeriodSeconds': pitchPeriodSeconds,
     });
   }
 

@@ -30,6 +30,12 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     private var orbitDegreesPerSecond: Double = 0
     private var orbitVerticalScreenOffset: Double = 0
     private var orbitLastTimestamp: CFTimeInterval = 0
+    // Sinusoidal pitch oscillation: when orbitPitchMax > orbitPitchMin the pitch
+    // sweeps between the two over orbitPitchPeriod seconds while the orbit runs.
+    private var orbitPitchMin: Double = 0
+    private var orbitPitchMax: Double = 0
+    private var orbitPitchPeriod: Double = 0
+    private var orbitElapsed: CFTimeInterval = 0
 
     var isOrbiting: Bool {
         return orbitDisplayLink != nil
@@ -267,13 +273,17 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.orbitDegreesPerSecond = args["degreesPerSecond"] as? Double ?? 12.0
         self.orbitVerticalScreenOffset = args["verticalScreenOffset"] as? Double ?? 0.0
         self.orbitHeading = args["startBearing"] as? Double ?? Double(self.mapView.actualHeading)
+        self.orbitPitchMin = args["pitchMin"] as? Double ?? 0.0
+        self.orbitPitchMax = args["pitchMax"] as? Double ?? 0.0
+        self.orbitPitchPeriod = args["pitchPeriodSeconds"] as? Double ?? 0.0
+        self.orbitElapsed = 0
 
         // Position the first frame immediately so there is no visible jump before
         // the display link fires.
         self.mapView.setOrbitCamera(
             center: self.orbitCenter,
             zoomLevel: self.orbitZoom,
-            pitch: self.orbitPitch,
+            pitch: self.currentOrbitPitch(),
             heading: self.orbitHeading,
             verticalScreenOffset: self.orbitVerticalScreenOffset
         )
@@ -284,6 +294,22 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.orbitDisplayLink = link
     }
 
+    /// Returns the pitch for the current orbit frame. When a valid oscillation
+    /// range is configured the pitch follows a sine wave between `orbitPitchMin`
+    /// and `orbitPitchMax`, starting at the minimum; otherwise the fixed
+    /// `orbitPitch` is used.
+    private func currentOrbitPitch() -> CGFloat {
+        guard orbitPitchPeriod > 0, orbitPitchMax > orbitPitchMin else {
+            return orbitPitch
+        }
+        let mid = (orbitPitchMin + orbitPitchMax) / 2.0
+        let amplitude = (orbitPitchMax - orbitPitchMin) / 2.0
+        // -cos starts the cycle at the minimum and rises smoothly to the maximum.
+        let phase = 2.0 * Double.pi * (orbitElapsed / orbitPitchPeriod)
+        let value = mid - amplitude * cos(phase)
+        return CGFloat(value)
+    }
+
     @objc private func onOrbitTick(_ link: CADisplayLink) -> Void {
         // Seed the timestamp on the first tick so the very first delta is ~0.
         if self.orbitLastTimestamp == 0 {
@@ -292,6 +318,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         }
         let dt = link.timestamp - self.orbitLastTimestamp
         self.orbitLastTimestamp = link.timestamp
+        self.orbitElapsed += dt
 
         var heading = (self.orbitHeading + self.orbitDegreesPerSecond * dt).truncatingRemainder(dividingBy: 360.0)
         if heading < 0 { heading += 360.0 }
@@ -300,7 +327,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.mapView.setOrbitCamera(
             center: self.orbitCenter,
             zoomLevel: self.orbitZoom,
-            pitch: self.orbitPitch,
+            pitch: self.currentOrbitPitch(),
             heading: self.orbitHeading,
             verticalScreenOffset: self.orbitVerticalScreenOffset
         )
@@ -310,6 +337,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.orbitDisplayLink?.invalidate()
         self.orbitDisplayLink = nil
         self.orbitLastTimestamp = 0
+        self.orbitElapsed = 0
     }
 
     private func stopOrbit() -> Void {
