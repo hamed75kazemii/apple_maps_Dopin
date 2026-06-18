@@ -68,7 +68,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
 
   bool get _isFocused => _focusedPoi != null;
 
-  late final Set<Annotation> _dopinAnnotations = <Annotation>{
+  late final Set<Annotation> _annotations = <Annotation>{
     Annotation(
       annotationId: const AnnotationId('marker_me'),
       position: const LatLng(34.0522, -118.2437),
@@ -84,6 +84,14 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
         borderRadius: 12,
         labelColor: _labelColor,
       ),
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_event'),
+      position: const LatLng(34.054, -118.245),
+      anchor: const Offset(0.5, 1.0),
+      onTap: () => _onMarkerTap('marker_event'),
+      //    glow: true,
+      svgMarker: const SvgMarker(),
     ),
   };
 
@@ -344,7 +352,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
               onMapCreated: (AppleMapController controller) {
                 _controller = controller;
               },
-              annotations: _dopinAnnotations,
+              annotations: _annotations,
               onPOITap: _onPoiTap,
               onTap: _onMapTap,
               onCameraMove: _onCameraMove,

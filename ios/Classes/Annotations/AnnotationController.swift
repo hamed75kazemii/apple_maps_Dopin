@@ -172,12 +172,19 @@ extension AppleMapController: AnnotationDelegate {
         let oldDopinSig = oldflutterAnnoation?.dopinMarkerSignature
         let newDopinSig = annotation.dopinMarkerSignature
         let dopinUsageChanged = oldflutterAnnoation?.usesDopinMarker != annotation.usesDopinMarker
+        let oldSvgSig = oldflutterAnnoation?.svgMarkerSignature
+        let newSvgSig = annotation.svgMarkerSignature
+        let svgUsageChanged = oldflutterAnnoation?.usesSvgMarker != annotation.usesSvgMarker
         if annotationView == nil
             || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType
             || oldflutterAnnoation?.glow != annotation.glow
             || dopinUsageChanged
-            || (annotation.usesDopinMarker && oldDopinSig != newDopinSig) {
-            if annotation.usesDopinMarker {
+            || svgUsageChanged
+            || (annotation.usesDopinMarker && oldDopinSig != newDopinSig)
+            || (annotation.usesSvgMarker && oldSvgSig != newSvgSig) {
+            if annotation.usesSvgMarker {
+                annotationView = getSvgMarkerAnnotationView(annotation: annotation, id: identifier)
+            } else if annotation.usesDopinMarker {
                 annotationView = getDopinMarkerAnnotationView(annotation: annotation, id: identifier)
             } else if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
                 annotationView = getMarkerAnnotationView(annotation: annotation, id: identifier)
@@ -194,6 +201,9 @@ extension AppleMapController: AnnotationDelegate {
         if let dopinView = annotationView as? DopinMarkerAnnotationView {
             dopinView.configureIfNeeded()
         }
+        if let svgView = annotationView as? SvgMarkerAnnotationView {
+            svgView.configureIfNeeded()
+        }
         // If annotation is not visible set alpha to 0 and don't let the user interact with it
         if !annotation.isVisible! {
             annotationView!.canShowCallout = false
@@ -203,7 +213,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         if annotation.icon.iconType != .MARKER {
             self.initInfoWindow(annotation: annotation, annotationView: annotationView!)
-            if annotation.icon.iconType != .PIN || annotation.usesDopinMarker {
+            if annotation.icon.iconType != .PIN || annotation.usesDopinMarker || annotation.usesSvgMarker {
                 let x = (0.5 - annotation.anchor.x) * Double(annotationView!.frame.size.width)
                 let y = (0.5 - annotation.anchor.y) * Double(annotationView!.frame.size.height)
                 annotationView!.centerOffset = CGPoint(x: x, y: y)
@@ -364,10 +374,13 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.dopinLabelFontSize = annotation.dopinLabelFontSize
                 oldAnnotation.dopinBadgeHeight = annotation.dopinBadgeHeight
                 oldAnnotation.dopinLabelColor = annotation.dopinLabelColor
+                oldAnnotation.usesSvgMarker = annotation.usesSvgMarker
+                oldAnnotation.svgWidth = annotation.svgWidth
+                oldAnnotation.svgHeight = annotation.svgHeight
             })
             
             if let view = self.mapView.view(for: oldAnnotation) {
-                if annotation.usesDopinMarker {
+                if annotation.usesDopinMarker || annotation.usesSvgMarker {
                     let newView = getAnnotationView(annotation: annotation)
                     view.frame.size = newView.frame.size
                     view.bounds = newView.bounds
@@ -420,6 +433,20 @@ extension AppleMapController: AnnotationDelegate {
         }
 
         return markerAnnotationView
+    }
+
+    private func getSvgMarkerAnnotationView(annotation: FlutterAnnotation, id: String) -> SvgMarkerAnnotationView {
+        let reuseId = "svg_\(id)"
+        let annotationView: SvgMarkerAnnotationView
+        if #available(iOS 11.0, *) {
+            self.mapView.register(SvgMarkerAnnotationView.self, forAnnotationViewWithReuseIdentifier: reuseId)
+            annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: reuseId, for: annotation) as! SvgMarkerAnnotationView
+        } else {
+            annotationView = SvgMarkerAnnotationView(annotation: annotation, reuseIdentifier: reuseId)
+        }
+        annotationView.stickyZPosition = annotation.zIndex
+        annotationView.canShowCallout = annotation.title != nil || annotation.subtitle != nil
+        return annotationView
     }
 
     private func getDopinMarkerAnnotationView(annotation: FlutterAnnotation, id: String) -> DopinMarkerAnnotationView {

@@ -159,6 +159,7 @@ class Annotation {
     this.glowColor = const Color(0xFFEC30E4),
     this.glowIntensity = 1.0,
     this.dopinMarker,
+    this.svgMarker,
   })  : assert(0.0 <= alpha && alpha <= 1.0),
         assert(0.0 <= glowIntensity && glowIntensity <= 1.0);
 
@@ -220,6 +221,10 @@ class Annotation {
   /// Use [onTap] for tap handling; [annotationId] is sent to Flutter on tap.
   final DopinMarker? dopinMarker;
 
+  /// When set (iOS), the marker is drawn from the native bundled event pin
+  /// ([SvgMarker]). Pin-shaped icons usually use `anchor: Offset(0.5, 1.0)`.
+  final SvgMarker? svgMarker;
+
   /// Creates a new [Annotation] object whose values are the same as this instance,
   /// unless overwritten by the specified parameters.
   Annotation copyWith({
@@ -238,6 +243,7 @@ class Annotation {
     Color? glowColorParam,
     double? glowIntensityParam,
     DopinMarker? dopinMarkerParam,
+    SvgMarker? svgMarkerParam,
   }) {
     return Annotation(
       annotationId: annotationId,
@@ -255,6 +261,7 @@ class Annotation {
       glowColor: glowColorParam ?? glowColor,
       glowIntensity: glowIntensityParam ?? glowIntensity,
       dopinMarker: dopinMarkerParam ?? dopinMarker,
+      svgMarker: svgMarkerParam ?? svgMarker,
     );
   }
 
@@ -284,6 +291,9 @@ class Annotation {
     if (dopinMarker != null) {
       json['dopinMarker'] = dopinMarker!._toJson();
     }
+    if (svgMarker != null) {
+      json['svgMarker'] = svgMarker!._toJson();
+    }
     return json;
   }
 
@@ -304,7 +314,8 @@ class Annotation {
         glow == typedOther.glow &&
         glowColor == typedOther.glowColor &&
         glowIntensity == typedOther.glowIntensity &&
-        dopinMarker == typedOther.dopinMarker;
+        dopinMarker == typedOther.dopinMarker &&
+        svgMarker == typedOther.svgMarker;
   }
 
   @override
@@ -322,6 +333,7 @@ class Annotation {
         glowColor,
         glowIntensity,
         dopinMarker,
+        svgMarker,
       );
 
   @override

@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 
 part 'src/annotation.dart';
 part 'src/dopin_marker.dart';
+part 'src/svg_marker.dart';
 part 'src/annotation_updates.dart';
 part 'src/apple_map.dart';
 part 'src/apple_poi_detail.dart';

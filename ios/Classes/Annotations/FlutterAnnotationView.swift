@@ -392,3 +392,88 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         return container
     }
 }
+
+// MARK: - SVG markers
+
+enum SvgMarkerImageLoader {
+
+    private static let cache = NSCache<NSString, UIImage>()
+
+    private static let resourceBundle: Bundle = {
+        let pluginBundle = Bundle(for: SvgMarkerAnnotationView.self)
+        if let url = pluginBundle.url(forResource: "apple_maps_flutter", withExtension: "bundle"),
+           let bundle = Bundle(url: url) {
+            return bundle
+        }
+        return pluginBundle
+    }()
+
+    /// Renders the bundled vector SVG at [width]×[height] points (device scale).
+    static func eventMarkerImage(width: CGFloat, height: CGFloat) -> UIImage? {
+        let scale = UIScreen.main.scale
+        let key = "event_marker|\(width)|\(height)|\(scale)" as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        guard let vector = UIImage(named: "event_marker", in: resourceBundle, compatibleWith: nil) else {
+            return nil
+        }
+
+        let size = CGSize(width: width, height: height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+
+        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            vector.draw(in: CGRect(origin: .zero, size: size))
+        }
+        cache.setObject(rendered, forKey: key)
+        return rendered
+    }
+}
+
+final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
+
+    private var configuredSignature: String?
+
+    override var annotation: MKAnnotation? {
+        didSet { applyAnnotationIfNeeded(force: true) }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        configuredSignature = nil
+        image = nil
+        bounds = .zero
+        frame = .zero
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        applyAnnotationIfNeeded(force: false)
+    }
+
+    func configureIfNeeded() {
+        applyAnnotationIfNeeded(force: true)
+    }
+
+    private func applyAnnotationIfNeeded(force: Bool) {
+        guard let flutter = annotation as? FlutterAnnotation, flutter.usesSvgMarker else { return }
+
+        let sig = flutter.svgMarkerSignature
+        if !force, sig == configuredSignature { return }
+        configuredSignature = sig
+
+        backgroundColor = .clear
+        clipsToBounds = false
+
+        let size = CGSize(width: flutter.svgWidth, height: flutter.svgHeight)
+        bounds = CGRect(origin: .zero, size: size)
+        frame.size = size
+        image = SvgMarkerImageLoader.eventMarkerImage(
+            width: flutter.svgWidth,
+            height: flutter.svgHeight
+        )
+    }
+}

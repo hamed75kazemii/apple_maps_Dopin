@@ -18,4 +18,7 @@ A new flutter plugin project.
 
   s.ios.deployment_target = '9.0'
   s.swift_version = '5.0'
+  s.resource_bundles = {
+    'apple_maps_flutter' => ['Resources/Assets.xcassets']
+  }
 end
