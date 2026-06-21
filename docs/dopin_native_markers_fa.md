@@ -10,7 +10,8 @@ Annotation(
   position: LatLng(lat, lng),
   onTap: () => onTap(),
   dopinMarker: DopinMarker(
-    imageUrl: avatarUrl,
+    imageUrls: [avatarUrl],           // یا چند URL تا ۴ تا
+    count: 12,                        // null = بدون بج شمارنده
     label: 'Me',              // null یا خالی = بدون بج
     width: 40,
     height: 40,
@@ -27,15 +28,48 @@ Annotation(
 
 | فیلد | پیش‌فرض | توضیح |
 |------|---------|--------|
-| `imageUrl` / `imagePng` / `withAssetImage` | — | تصویر |
+| `imageUrls` / `imagePng` / `withAssetImage` | — | تصویر (۱ تا ۴ URL) |
 | `label` | `null` | متن بج پایین؛ اگر نباشد بج رسم نمی‌شود |
-| `width` / `height` | `40` | اندازه قاب (بیرون) |
+| `count` | `null` | بج شمارنده گوشه بالا-راست؛ بالای ۹ → `9+` |
+| `width` / `height` | `40` | اندازه قاب بیرونی (ثابت برای همه چیدمان‌ها) |
 | `borderWidth` | `2` | ضخامت بردر |
 | `borderColor` | سفید | رنگ بردر |
 | `borderRadius` | `null` → **دایره** | گوشه قاب |
 | `labelFontSize` | `10` | اندازه فونت لیبل |
 | `badgeHeight` | `18` | ارتفاع بج |
 | `labelColor` | بنفش | رنگ متن لیبل |
+
+## سایه (`shadow` روی [Annotation])
+
+```dart
+Annotation(
+  annotationId: AnnotationId('user_1'),
+  position: LatLng(lat, lng),
+  shadow: const MarkerShadow(
+    color: Color(0x40000000),
+    blurRadius: 4,
+    offset: Offset(0, 2),
+  ),
+  dopinMarker: DopinMarker(imageUrls: [avatarUrl]),
+),
+```
+
+| فیلد | پیش‌فرض | توضیح |
+|------|---------|--------|
+| `color` | `0x40000000` | رنگ سایه (alpha = شدت) |
+| `blurRadius` | `4` | میزان بلور |
+| `offset` | `(0, 2)` | جابه‌جایی سایه |
+
+## چیدمان چند تصویر (`imageUrls`)
+
+| تعداد | اندازه قاب | چیدمان |
+|------|------------|--------|
+| ۱ | `width` × `height` | تک تصویر (دایره یا squircle با بردر) |
+| ۲ | `width` × `height / 2` | دو تصویر کنار هم در کپسول افقی |
+| ۳ | `width` × `height` | دو تصویر بالا + یکی وسط پایین |
+| ۴ | `width` × `height` | گرید ۲×۲ |
+
+عرض همه مارکرها یکسان است؛ فقط تصاویر داخل قاب کوچک‌تر می‌شوند.
 
 ## PNG / asset
 

@@ -57,8 +57,73 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     zoom: 12,
   );
 
-  static const String _demoAvatarUrl = 'https://i.pravatar.cc/150?img=12';
+  static const List<String> _demoGroupUrls = <String>[
+    'https://i.pravatar.cc/150?img=1',
+    'https://i.pravatar.cc/150?img=2',
+    'https://i.pravatar.cc/150?img=3',
+    'https://i.pravatar.cc/150?img=4',
+  ];
+  static const List<String> _demoDualUrls = <String>[
+    'https://i.pravatar.cc/150?img=1',
+    'https://i.pravatar.cc/150?img=2',
+  ];
+  static const List<String> _demoTripleUrls = <String>[
+    'https://i.pravatar.cc/150?img=1',
+    'https://i.pravatar.cc/150?img=2',
+    'https://i.pravatar.cc/150?img=3',
+  ];
   static const Color _labelColor = Color(0xFF7B2CBF);
+  static const MarkerShadow _demoShadow = MarkerShadow(
+    color: Color(0x40000000),
+    blurRadius: 4,
+    offset: Offset(0, 2),
+  );
+
+  static const DopinMarker _singleImageMarker = DopinMarker(
+    imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
+    // count: 12,
+    // label: '1',
+    width: 46,
+    height: 46,
+    borderWidth: 3,
+    borderColor: Colors.white,
+    borderRadius: 12,
+    labelColor: _labelColor,
+  );
+
+  static const DopinMarker _dualImageMarker = DopinMarker(
+    imageUrls: _demoDualUrls,
+    // count: 3,
+    //   label: '2',
+    width: 46,
+    height: 46,
+    borderWidth: 3,
+    borderColor: Colors.white,
+    borderRadius: 12,
+    labelColor: _labelColor,
+  );
+
+  static const DopinMarker _tripleImageMarker = DopinMarker(
+    imageUrls: _demoTripleUrls,
+    // label: '3',
+    width: 46,
+    height: 46,
+    borderWidth: 3,
+    borderColor: Colors.white,
+    borderRadius: 12,
+    labelColor: _labelColor,
+  );
+
+  static const DopinMarker _quadImageMarker = DopinMarker(
+    imageUrls: _demoGroupUrls,
+    // label: '4',
+    width: 46,
+    height: 46,
+    borderWidth: 3,
+    borderColor: Colors.white,
+    borderRadius: 12,
+    labelColor: _labelColor,
+  );
 
   static const double _focusPitchMin = 50;
   static const double _focusPitchMax = 60;
@@ -70,18 +135,66 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
 
   late final Set<Annotation> _annotations = <Annotation>{
     Annotation(
-      annotationId: const AnnotationId('marker_me'),
+      annotationId: const AnnotationId('marker_single'),
       position: const LatLng(34.0522, -118.2437),
-      onTap: () => _onMarkerTap('marker_me'),
-      glow: true,
-      dopinMarker: const DopinMarker(
-        imageUrl: _demoAvatarUrl,
-        label: 'Me',
-        width: 40,
-        height: 40,
-        borderWidth: 2,
+      onTap: () => _onMarkerTap('marker_single'),
+      shadow: _demoShadow,
+      dopinMarker: _singleImageMarker,
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_dual'),
+      position: const LatLng(34.056, -118.2437),
+      onTap: () => _onMarkerTap('marker_dual'),
+      shadow: _demoShadow,
+      dopinMarker: _dualImageMarker,
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_triple'),
+      position: const LatLng(34.0522, -118.238),
+      onTap: () => _onMarkerTap('marker_triple'),
+      shadow: _demoShadow,
+      dopinMarker: _tripleImageMarker,
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_quad'),
+      position: const LatLng(34.048, -118.2437),
+      onTap: () => _onMarkerTap('marker_quad'),
+      shadow: _demoShadow,
+      dopinMarker: _quadImageMarker,
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_multi_image_event'),
+      position: const LatLng(34.057, -118.247),
+      anchor: const Offset(0.5, 1.0),
+      onTap: () => _onMarkerTap('marker_event'),
+      // glow: true,
+      shadow: _demoShadow,
+      dopinMarker: DopinMarker(
+        count: 12,
+        imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
+        width: 46,
+        height: 46,
+        borderWidth: 3,
         borderColor: Colors.white,
-        borderRadius: 12,
+        borderRadius: 22,
+        labelColor: _labelColor,
+      ),
+    ),
+    Annotation(
+      annotationId: const AnnotationId('marker_multi_image_event2'),
+      position: const LatLng(34.057, -118.248),
+      anchor: const Offset(0.5, 1.0),
+      onTap: () => _onMarkerTap('marker_event'),
+      // glow: true,
+      shadow: _demoShadow,
+      dopinMarker: DopinMarker(
+        //   count: 12,
+        imageUrls: <String>['https://i.pravatar.cc/150?img=3'],
+        width: 46,
+        height: 46,
+        borderWidth: 3,
+        borderColor: Colors.white,
+        borderRadius: 22,
         labelColor: _labelColor,
       ),
     ),
@@ -90,8 +203,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       position: const LatLng(34.054, -118.245),
       anchor: const Offset(0.5, 1.0),
       onTap: () => _onMarkerTap('marker_event'),
-      //    glow: true,
-      svgMarker: const SvgMarker(),
+      // glow: true,
+      shadow: _demoShadow,
+      svgMarker: const SvgMarker(imageUrl: 'https://i.pravatar.cc/150?img=8'),
     ),
   };
 

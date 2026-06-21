@@ -6,15 +6,19 @@ part of apple_maps_flutter;
 
 /// Native Dopin map marker (iOS). Image + optional border + optional bottom label.
 ///
-/// Image priority: [imagePng] → [imageFromAsset] → [imageUrl].
+/// Image priority: [imagePng] → [imageFromAsset] → [imageUrls].
+/// [imageUrls] accepts up to 4 URLs; layout adapts to count (1–4).
+/// [width] / [height] define the outer frame: 1 and 3–4 images use the full size;
+/// 2 images use full [width] and half [height]. Images shrink inside the fixed frame.
 /// If [borderRadius] is omitted, the marker is drawn as a circle.
 @immutable
 class DopinMarker {
   const DopinMarker({
-    this.imageUrl,
+    this.imageUrls,
     this.imagePng,
     this.imageFromAsset,
     this.label,
+    this.count,
     this.width = 40,
     this.height = 40,
     this.borderWidth = 2,
@@ -28,6 +32,7 @@ class DopinMarker {
   factory DopinMarker.withPng({
     required Uint8List imagePng,
     String? label,
+    int? count,
     double width = 40,
     double height = 40,
     double borderWidth = 2,
@@ -40,6 +45,7 @@ class DopinMarker {
     return DopinMarker(
       imagePng: imagePng,
       label: label,
+      count: count,
       width: width,
       height: height,
       borderWidth: borderWidth,
@@ -58,6 +64,7 @@ class DopinMarker {
     String? package,
     bool mipmaps = true,
     String? label,
+    int? count,
     double width = 40,
     double height = 40,
     double borderWidth = 2,
@@ -82,6 +89,7 @@ class DopinMarker {
     return DopinMarker(
       imageFromAsset: assetJson,
       label: label,
+      count: count,
       width: width,
       height: height,
       borderWidth: borderWidth,
@@ -93,12 +101,17 @@ class DopinMarker {
     );
   }
 
-  final String? imageUrl;
+  /// Remote image URLs (max 4). Layout: 1 = single, 2 = pill row,
+  /// 3 = triangle, 4 = 2×2 grid.
+  final List<String>? imageUrls;
   final Uint8List? imagePng;
   final List<dynamic>? imageFromAsset;
 
   /// Bottom badge; `null` or empty = no badge.
   final String? label;
+
+  /// Top-right count badge. `null` or `<= 0` = hidden. Values above 9 show `9+`.
+  final int? count;
 
   final double width;
   final double height;
@@ -121,7 +134,8 @@ class DopinMarker {
       'labelFontSize': labelFontSize,
       'badgeHeight': badgeHeight,
       'labelColor': labelColor.value,
-      if (imageUrl != null) 'imageUrl': imageUrl,
+      if (imageUrls != null && imageUrls!.isNotEmpty)
+        'imageUrls': imageUrls!.take(4).toList(),
       if (imagePng != null) 'imagePng': imagePng,
       if (imageFromAsset != null) 'imageFromAsset': imageFromAsset,
       if (borderRadius != null) 'borderRadius': borderRadius,
@@ -129,6 +143,9 @@ class DopinMarker {
     final String? trimmed = label?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
       json['label'] = trimmed;
+    }
+    if (count != null && count! > 0) {
+      json['count'] = count;
     }
     return json;
   }
@@ -138,10 +155,11 @@ class DopinMarker {
     if (identical(this, other)) return true;
     if (other is! DopinMarker) return false;
     final DopinMarker o = other;
-    return imageUrl == o.imageUrl &&
+    return _listEqual(imageUrls, o.imageUrls) &&
         _bytesEqual(imagePng, o.imagePng) &&
         _listEqual(imageFromAsset, o.imageFromAsset) &&
         label == o.label &&
+        count == o.count &&
         width == o.width &&
         height == o.height &&
         borderWidth == o.borderWidth &&
@@ -154,10 +172,11 @@ class DopinMarker {
 
   @override
   int get hashCode => Object.hash(
-        imageUrl,
+        imageUrls == null ? null : Object.hashAll(imageUrls!),
         imagePng?.length,
         imageFromAsset == null ? null : Object.hashAll(imageFromAsset!),
         label,
+        count,
         width,
         height,
         borderWidth,

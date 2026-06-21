@@ -30,12 +30,19 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var glowColorArgb: UInt32 = 0xFF_EC30E4
     var glowIntensity: Double = 1.0
 
+    var markerShadowEnabled: Bool = false
+    var markerShadowColor: UIColor = UIColor.black.withAlphaComponent(0.25)
+    var markerShadowBlurRadius: CGFloat = 4
+    var markerShadowOffsetX: CGFloat = 0
+    var markerShadowOffsetY: CGFloat = 2
+
     var usesDopinMarker: Bool = false
-    var dopinImageUrl: String?
+    var dopinImageUrls: [String] = []
     var dopinImagePngData: Data?
     var dopinImageAssetName: String?
     var dopinImageAssetScale: CGFloat = 1.0
     var dopinMarkerLabel: String?
+    var dopinMarkerCount: Int?
     var dopinFrameWidth: CGFloat = 40
     var dopinFrameHeight: CGFloat = 40
     var dopinBorderWidth: CGFloat = 2
@@ -49,16 +56,20 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var usesSvgMarker: Bool = false
     var svgWidth: CGFloat = 38
     var svgHeight: CGFloat = 50
+    var svgImageUrl: String?
+    var svgImagePngData: Data?
 
     var dopinMarkerSignature: String {
         let pngLen = dopinImagePngData?.count ?? 0
         let asset = dopinImageAssetName ?? ""
         let radius = dopinBorderRadius.map { "\($0)" } ?? "circle"
-        return "\(dopinImageUrl ?? "")|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)"
+        let urls = dopinImageUrls.joined(separator: ",")
+        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)"
     }
 
     var svgMarkerSignature: String {
-        return "\(svgWidth)|\(svgHeight)"
+        let pngLen = svgImagePngData?.count ?? 0
+        return "\(svgWidth)|\(svgHeight)|\(svgImageUrl ?? "")|\(pngLen)"
     }
 
     public init(fromDictionary annotationData: Dictionary<String, Any>, registrar: FlutterPluginRegistrar) {
@@ -107,10 +118,30 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             self.glowIntensity = min(max(gi.doubleValue, 0), 1)
         }
 
+        if let shadow = annotationData["shadow"] as? Dictionary<String, Any> {
+            self.markerShadowEnabled = true
+            if let color = shadow["color"] as? NSNumber {
+                self.markerShadowColor = Self.uiColorFromArgb(color.uint32Value)
+            } else if let color = shadow["color"] as? Int {
+                self.markerShadowColor = Self.uiColorFromArgb(UInt32(color))
+            }
+            if let blur = Self.cg(shadow["blurRadius"]) {
+                self.markerShadowBlurRadius = blur
+            }
+            if let offset = shadow["offset"] as? Array<Double>, offset.count >= 2 {
+                self.markerShadowOffsetX = CGFloat(offset[0])
+                self.markerShadowOffsetY = CGFloat(offset[1])
+            }
+        }
+
         if let dopin = annotationData["dopinMarker"] as? Dictionary<String, Any> {
             self.usesDopinMarker = true
             let layout = dopin["layout"] as? Dictionary<String, Any>
-            self.dopinImageUrl = dopin["imageUrl"] as? String
+            if let urlList = dopin["imageUrls"] as? [String] {
+                self.dopinImageUrls = Array(urlList.prefix(4).filter { !$0.isEmpty })
+            } else if let url = dopin["imageUrl"] as? String, !url.isEmpty {
+                self.dopinImageUrls = [url]
+            }
             if let png = dopin["imagePng"] as? FlutterStandardTypedData {
                 self.dopinImagePngData = png.data
             }
@@ -122,6 +153,12 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             if let label = dopin["label"] as? String {
                 let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.dopinMarkerLabel = trimmed.isEmpty ? nil : trimmed
+            }
+            if let count = dopin["count"] as? NSNumber {
+                let value = count.intValue
+                self.dopinMarkerCount = value > 0 ? value : nil
+            } else if let count = dopin["count"] as? Int {
+                self.dopinMarkerCount = count > 0 ? count : nil
             }
             if let w = Self.cg(dopin["width"]) ?? Self.cg(layout?["width"]) ?? Self.cg(layout?["innerWidth"]) {
                 self.dopinFrameWidth = w
@@ -161,6 +198,12 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             if let h = Self.cg(svg["height"]) {
                 self.svgHeight = h
             }
+            if let url = svg["imageUrl"] as? String, !url.isEmpty {
+                self.svgImageUrl = url
+            }
+            if let png = svg["imagePng"] as? FlutterStandardTypedData {
+                self.svgImagePngData = png.data
+            }
         }
     }
 
@@ -199,7 +242,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
     
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
-        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrl == rhs.dopinImageUrl && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight
+        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData
     }
     
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {

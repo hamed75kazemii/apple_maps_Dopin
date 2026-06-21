@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+part 'src/marker_shadow.dart';
 part 'src/annotation.dart';
 part 'src/dopin_marker.dart';
 part 'src/svg_marker.dart';

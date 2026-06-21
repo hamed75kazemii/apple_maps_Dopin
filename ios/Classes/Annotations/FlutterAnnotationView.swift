@@ -33,6 +33,12 @@ class FlutterAnnotationView: MKAnnotationView {
             (self.layer as! ZPositionableLayer).stickyZPosition = newValue
         }
     }
+
+    func applyFlutterMarkerShadow(contentView: UIView? = nil) {
+        guard let flutter = annotation as? FlutterAnnotation else { return }
+        let target = contentView ?? self
+        MarkerShadowStyle.apply(to: target, from: flutter)
+    }
 }
 
 /// Glow pulse behind custom bitmap or [DopinMarkerAnnotationView] markers when [FlutterAnnotation.glow] is true.
@@ -201,12 +207,36 @@ private class ZPositionableLayer: CALayer {
 
 // MARK: - Dopin native markers
 
+enum MarkerShadowStyle {
+    static func apply(to view: UIView, from annotation: FlutterAnnotation) {
+        guard annotation.markerShadowEnabled else {
+            view.layer.shadowOpacity = 0
+            return
+        }
+
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        annotation.markerShadowColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+
+        view.layer.shadowColor = UIColor(red: r, green: g, blue: b, alpha: 1).cgColor
+        view.layer.shadowOpacity = Float(a)
+        view.layer.shadowRadius = annotation.markerShadowBlurRadius
+        view.layer.shadowOffset = CGSize(
+            width: annotation.markerShadowOffsetX,
+            height: annotation.markerShadowOffsetY
+        )
+        view.layer.masksToBounds = false
+    }
+}
+
 enum DopinMarkerImageLoader {
 
     private static let cache = NSCache<NSString, UIImage>()
     private static var inFlight = [String: [(UIImage?) -> Void]]()
 
-    /// Priority: PNG bytes → asset → URL.
+    /// Priority: PNG bytes → asset → first URL (legacy single-image callers).
     static func load(for annotation: FlutterAnnotation, completion: @escaping (UIImage?) -> Void) {
         if let data = annotation.dopinImagePngData,
            let image = UIImage(data: data, scale: UIScreen.main.scale) {
@@ -225,7 +255,7 @@ enum DopinMarkerImageLoader {
             }
             return
         }
-        load(urlString: annotation.dopinImageUrl, completion: completion)
+        load(urlString: annotation.dopinImageUrls.first, completion: completion)
     }
 
     static func load(urlString: String?, completion: @escaping (UIImage?) -> Void) {
@@ -267,7 +297,7 @@ enum DopinMarkerImageLoader {
 final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
 
     private static let contentTag = 8_441_001
-    private static let imageTag = 8_441_002
+    private static let imageTagBase = 8_441_002
 
     private var configuredSignature: String?
     private var imageLoadToken: String?
@@ -295,11 +325,20 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         applyAnnotationIfNeeded(force: true)
     }
 
+    override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
+        super.applyFlutterMarkerShadow(contentView: contentView ?? viewWithTag(Self.contentTag))
+    }
+
     private func applyAnnotationIfNeeded(force: Bool) {
         guard let flutter = annotation as? FlutterAnnotation, flutter.usesDopinMarker else { return }
 
         let sig = flutter.dopinMarkerSignature
-        if !force, sig == configuredSignature { return }
+        if !force, sig == configuredSignature {
+            if let content = viewWithTag(Self.contentTag) {
+                applyFlutterMarkerShadow(contentView: content)
+            }
+            return
+        }
         configuredSignature = sig
 
         viewWithTag(Self.contentTag)?.removeFromSuperview()
@@ -316,15 +355,36 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         frame.size = size
         content.frame = bounds
 
-        loadMarkerImage(into: content, annotation: flutter)
+        loadMarkerImages(into: content, annotation: flutter)
+        applyFlutterMarkerShadow(contentView: content)
     }
 
-    private func loadMarkerImage(into content: UIView, annotation: FlutterAnnotation) {
+    private func loadMarkerImages(into content: UIView, annotation: FlutterAnnotation) {
         let token = annotation.dopinMarkerSignature
         imageLoadToken = token
-        DopinMarkerImageLoader.load(for: annotation) { [weak self, weak content] image in
-            guard let self = self, let content = content, self.imageLoadToken == token else { return }
-            guard let imageView = Self.findImageView(in: content) else { return }
+
+        let imageViews = Self.findImageViews(in: content)
+        let urlCount = min(annotation.dopinImageUrls.count, 4)
+
+        if urlCount > 1 {
+            for index in 0..<urlCount {
+                guard index < imageViews.count else { break }
+                let url = annotation.dopinImageUrls[index]
+                let imageView = imageViews[index]
+                DopinMarkerImageLoader.load(urlString: url) { [weak self] image in
+                    guard let self = self, self.imageLoadToken == token else { return }
+                    if let image = image {
+                        imageView.image = image
+                        imageView.backgroundColor = .clear
+                    }
+                }
+            }
+            return
+        }
+
+        guard let imageView = imageViews.first else { return }
+        DopinMarkerImageLoader.load(for: annotation) { [weak self] image in
+            guard let self = self, self.imageLoadToken == token else { return }
             if let image = image {
                 imageView.image = image
                 imageView.backgroundColor = .clear
@@ -332,21 +392,32 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         }
     }
 
-    private static func findImageView(in root: UIView) -> UIImageView? {
-        if let iv = root.viewWithTag(imageTag) as? UIImageView { return iv }
-        for child in root.subviews {
-            if let found = findImageView(in: child) { return found }
+    private static func findImageViews(in root: UIView) -> [UIImageView] {
+        var views: [UIImageView] = []
+        for index in 0..<4 {
+            if let iv = root.viewWithTag(imageTagBase + index) as? UIImageView {
+                views.append(iv)
+            }
         }
-        return nil
+        return views.sorted { $0.tag < $1.tag }
     }
 
-    private static func buildDopinMarker(annotation: FlutterAnnotation) -> UIView {
-        let frameW = annotation.dopinFrameWidth
-        let frameH = annotation.dopinFrameHeight
-        let border = annotation.dopinBorderWidth
-        let outerRadius = annotation.dopinBorderRadius ?? min(frameW, frameH) / 2
-        let innerRadius = max(0, outerRadius - border)
+    private static func imageView(side: CGFloat, cornerRadius: CGFloat, tag: Int) -> UIImageView {
+        let iv = UIImageView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        iv.tag = tag
+        iv.contentMode = .scaleAspectFill
+        iv.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        iv.layer.cornerRadius = cornerRadius
+        iv.clipsToBounds = true
+        return iv
+    }
 
+    private static func wrapMarkerWithBadge(
+        frameView: UIView,
+        frameW: CGFloat,
+        frameH: CGFloat,
+        annotation: FlutterAnnotation
+    ) -> UIView {
         let labelText = annotation.dopinMarkerLabel ?? ""
         let hasLabel = !labelText.isEmpty
         let badgeH = annotation.dopinBadgeHeight
@@ -355,23 +426,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         let totalH = hasLabel ? frameH + badgeH - badgeOverlap : frameH
 
         let container = UIView(frame: CGRect(x: 0, y: 0, width: totalW, height: totalH))
-
-        let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
-        frameView.backgroundColor = annotation.dopinBorderColor
-        frameView.layer.cornerRadius = outerRadius
-        frameView.clipsToBounds = true
-
-        let avatarSide = max(0, min(frameW, frameH) - border * 2)
-        let avatarWrap = UIView(frame: CGRect(x: 0, y: 0, width: avatarSide, height: avatarSide))
-        avatarWrap.layer.cornerRadius = innerRadius
-        avatarWrap.clipsToBounds = true
-        avatarWrap.center = CGPoint(x: frameView.bounds.midX, y: frameView.bounds.midY)
-        let avatar = UIImageView(frame: avatarWrap.bounds)
-        avatar.tag = imageTag
-        avatar.contentMode = .scaleAspectFill
-        avatar.backgroundColor = UIColor(white: 0.92, alpha: 1)
-        avatarWrap.addSubview(avatar)
-        frameView.addSubview(avatarWrap)
+        container.clipsToBounds = false
         container.addSubview(frameView)
 
         if hasLabel {
@@ -388,8 +443,155 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
             container.addSubview(badge)
         }
 
+        if let count = annotation.dopinMarkerCount, count > 0 {
+            addCountBadge(to: container, frameW: frameW, frameH: frameH, count: count)
+        }
+
         container.bounds = CGRect(origin: .zero, size: CGSize(width: totalW, height: totalH))
         return container
+    }
+
+    private static func addCountBadge(
+        to container: UIView,
+        frameW: CGFloat,
+        frameH: CGFloat,
+        count: Int
+    ) {
+        let badgeSize = max(15, min(frameW, frameH) * 0.40)
+        let badgeText = count > 9 ? "9+" : "\(count)"
+        let x = frameW - badgeSize * 0.80
+        let y = -badgeSize * 0.03
+        let badge = UIView(frame: CGRect(x: x, y: y, width: badgeSize, height: badgeSize))
+        badge.backgroundColor = .white
+        badge.layer.cornerRadius = badgeSize / 2
+        badge.clipsToBounds = false
+        badge.layer.shadowColor = UIColor.black.cgColor
+        badge.layer.shadowOpacity = 0.22
+        badge.layer.shadowRadius = 2
+        badge.layer.shadowOffset = CGSize(width: 0, height: 1)
+
+        let badgeLabel = UILabel(frame: badge.bounds)
+        badgeLabel.text = badgeText
+        badgeLabel.font = .systemFont(ofSize: badgeSize * 0.52, weight: .bold)
+        badgeLabel.textAlignment = .center
+        badgeLabel.textColor = .black
+        badge.addSubview(badgeLabel)
+        container.addSubview(badge)
+    }
+
+    private static func buildDopinMarker(annotation: FlutterAnnotation) -> UIView {
+        let urlCount = min(annotation.dopinImageUrls.count, 4)
+        let hasFallbackImage = annotation.dopinImagePngData != nil || annotation.dopinImageAssetName != nil
+        let imageCount = urlCount > 0 ? urlCount : (hasFallbackImage ? 1 : 1)
+
+        if imageCount <= 1 {
+            return buildSingleImageMarker(annotation: annotation)
+        }
+        return buildMultiImageMarker(annotation: annotation, imageCount: imageCount)
+    }
+
+    private static func buildSingleImageMarker(annotation: FlutterAnnotation) -> UIView {
+        let frameW = annotation.dopinFrameWidth
+        let frameH = annotation.dopinFrameHeight
+        let border = annotation.dopinBorderWidth
+        let outerRadius = annotation.dopinBorderRadius ?? min(frameW, frameH) / 2
+        let innerRadius = max(0, outerRadius - border)
+
+        let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
+        frameView.backgroundColor = annotation.dopinBorderColor
+        frameView.layer.cornerRadius = outerRadius
+        frameView.clipsToBounds = true
+
+        let avatarSide = max(0, min(frameW, frameH) - border * 2)
+        let avatarWrap = UIView(frame: CGRect(x: 0, y: 0, width: avatarSide, height: avatarSide))
+        avatarWrap.layer.cornerRadius = innerRadius
+        avatarWrap.clipsToBounds = true
+        avatarWrap.center = CGPoint(x: frameView.bounds.midX, y: frameView.bounds.midY)
+        let avatar = imageView(side: avatarSide, cornerRadius: innerRadius, tag: imageTagBase)
+        avatarWrap.addSubview(avatar)
+        frameView.addSubview(avatarWrap)
+
+        return wrapMarkerWithBadge(frameView: frameView, frameW: frameW, frameH: frameH, annotation: annotation)
+    }
+
+    private static func buildMultiImageMarker(annotation: FlutterAnnotation, imageCount: Int) -> UIView {
+        let baseW = annotation.dopinFrameWidth
+        let baseH = annotation.dopinFrameHeight
+        let padding: CGFloat = 4
+        let gap: CGFloat = 3
+
+        let frameW = baseW
+        let frameH: CGFloat
+        let outerRadius: CGFloat
+
+        switch imageCount {
+        case 2:
+            frameH = baseH / 2
+            outerRadius = frameH / 2
+        default:
+            frameH = baseH
+            outerRadius = annotation.dopinBorderRadius ?? min(baseW, baseH) / 2
+        }
+
+        let innerW = max(0, frameW - padding * 2)
+        let innerH = max(0, frameH - padding * 2)
+
+        let cell: CGFloat
+        var placements: [(origin: CGPoint, index: Int)] = []
+
+        switch imageCount {
+        case 2:
+            let dualPadding: CGFloat = 3
+            let dualInnerW = max(0, frameW - dualPadding * 2)
+            let dualInnerH = max(0, frameH - dualPadding * 2)
+            let maxDualCell = min((dualInnerW - gap) / 2, dualInnerH)
+            cell = min(maxDualCell + 2, dualInnerH, (dualInnerW - gap) / 2)
+            let rowW = cell * 2 + gap
+            let startX = dualPadding + (dualInnerW - rowW) / 2
+            let startY = dualPadding + (dualInnerH - cell) / 2
+            placements = [
+                (CGPoint(x: startX, y: startY), 0),
+                (CGPoint(x: startX + cell + gap, y: startY), 1),
+            ]
+        case 3:
+            cell = min((innerW - gap) / 2, (innerH - gap) / 2)
+            let gridW = cell * 2 + gap
+            let gridH = cell * 2 + gap
+            let startX = padding + (innerW - gridW) / 2
+            let startY = padding + (innerH - gridH) / 2
+            placements = [
+                (CGPoint(x: startX, y: startY), 0),
+                (CGPoint(x: startX + cell + gap, y: startY), 1),
+                (CGPoint(x: startX + (cell + gap) / 2, y: startY + cell + gap), 2),
+            ]
+        default:
+            cell = min((innerW - gap) / 2, (innerH - gap) / 2)
+            let gridW = cell * 2 + gap
+            let gridH = cell * 2 + gap
+            let startX = padding + (innerW - gridW) / 2
+            let startY = padding + (innerH - gridH) / 2
+            placements = [
+                (CGPoint(x: startX, y: startY), 0),
+                (CGPoint(x: startX + cell + gap, y: startY), 1),
+                (CGPoint(x: startX, y: startY + cell + gap), 2),
+                (CGPoint(x: startX + cell + gap, y: startY + cell + gap), 3),
+            ]
+        }
+
+        let imageCorner = cell * 0.28
+
+        let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
+        frameView.backgroundColor = annotation.dopinBorderColor
+        frameView.layer.cornerRadius = outerRadius
+        frameView.clipsToBounds = true
+
+        for placement in placements {
+            let iv = imageView(side: cell, cornerRadius: imageCorner, tag: imageTagBase + placement.index)
+            iv.frame.origin = placement.origin
+            frameView.addSubview(iv)
+        }
+
+        return wrapMarkerWithBadge(frameView: frameView, frameW: frameW, frameH: frameH, annotation: annotation)
     }
 }
 
@@ -407,6 +609,11 @@ enum SvgMarkerImageLoader {
         }
         return pluginBundle
     }()
+
+    /// Circle center in the bundled SVG viewBox (0 0 38 50).
+    private static let circleCenterXRatio: CGFloat = 19.0 / 38.0
+    private static let circleCenterYRatio: CGFloat = 19.0 / 50.0
+    private static let avatarWidthRatio: CGFloat = 0.8
 
     /// Renders the bundled vector SVG at [width]×[height] points (device scale).
     static func eventMarkerImage(width: CGFloat, height: CGFloat) -> UIImage? {
@@ -431,11 +638,32 @@ enum SvgMarkerImageLoader {
         cache.setObject(rendered, forKey: key)
         return rendered
     }
+
+    static func centerAvatarFrame(width: CGFloat, height: CGFloat) -> CGRect {
+        let side = width * avatarWidthRatio
+        let centerX = width * circleCenterXRatio
+        let centerY = height * circleCenterYRatio
+        return CGRect(x: centerX - side / 2, y: centerY - side / 2, width: side, height: side)
+    }
+
+    static func loadCenterImage(for annotation: FlutterAnnotation, completion: @escaping (UIImage?) -> Void) {
+        if let data = annotation.svgImagePngData,
+           let image = UIImage(data: data, scale: UIScreen.main.scale) {
+            completion(image)
+            return
+        }
+        DopinMarkerImageLoader.load(urlString: annotation.svgImageUrl, completion: completion)
+    }
 }
 
 final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
 
+    private static let contentTag = 8_442_001
+    private static let pinTag = 8_442_002
+    private static let avatarTag = 8_442_003
+
     private var configuredSignature: String?
+    private var imageLoadToken: String?
 
     override var annotation: MKAnnotation? {
         didSet { applyAnnotationIfNeeded(force: true) }
@@ -444,6 +672,8 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
     override func prepareForReuse() {
         super.prepareForReuse()
         configuredSignature = nil
+        imageLoadToken = nil
+        viewWithTag(Self.contentTag)?.removeFromSuperview()
         image = nil
         bounds = .zero
         frame = .zero
@@ -458,22 +688,85 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         applyAnnotationIfNeeded(force: true)
     }
 
+    override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
+        super.applyFlutterMarkerShadow(contentView: contentView ?? viewWithTag(Self.contentTag))
+    }
+
     private func applyAnnotationIfNeeded(force: Bool) {
         guard let flutter = annotation as? FlutterAnnotation, flutter.usesSvgMarker else { return }
 
         let sig = flutter.svgMarkerSignature
-        if !force, sig == configuredSignature { return }
+        if !force, sig == configuredSignature {
+            applyFlutterMarkerShadow()
+            return
+        }
         configuredSignature = sig
+        imageLoadToken = sig
 
+        viewWithTag(Self.contentTag)?.removeFromSuperview()
+        image = nil
         backgroundColor = .clear
         clipsToBounds = false
 
-        let size = CGSize(width: flutter.svgWidth, height: flutter.svgHeight)
+        let content = Self.buildSvgMarker(annotation: flutter)
+        content.tag = Self.contentTag
+        addSubview(content)
+
+        let size = content.bounds.size
         bounds = CGRect(origin: .zero, size: size)
         frame.size = size
-        image = SvgMarkerImageLoader.eventMarkerImage(
-            width: flutter.svgWidth,
-            height: flutter.svgHeight
-        )
+        content.frame = bounds
+
+        loadCenterImage(into: content, annotation: flutter)
+        applyFlutterMarkerShadow(contentView: content)
+    }
+
+    private func loadCenterImage(into content: UIView, annotation: FlutterAnnotation) {
+        guard let avatarView = content.viewWithTag(Self.avatarTag) as? UIImageView else { return }
+        let hasImage = annotation.svgImagePngData != nil
+            || (annotation.svgImageUrl?.isEmpty == false)
+        guard hasImage else {
+            avatarView.isHidden = true
+            return
+        }
+
+        avatarView.isHidden = false
+        let token = annotation.svgMarkerSignature
+        imageLoadToken = token
+        SvgMarkerImageLoader.loadCenterImage(for: annotation) { [weak self, weak avatarView] image in
+            guard let self = self, let avatarView = avatarView, self.imageLoadToken == token else { return }
+            if let image = image {
+                avatarView.image = image
+                avatarView.backgroundColor = .clear
+            }
+        }
+    }
+
+    private static func buildSvgMarker(annotation: FlutterAnnotation) -> UIView {
+        let width = annotation.svgWidth
+        let height = annotation.svgHeight
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        container.clipsToBounds = false
+
+        let pinView = UIImageView(frame: container.bounds)
+        pinView.tag = pinTag
+        pinView.contentMode = .scaleToFill
+        pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+        container.addSubview(pinView)
+
+        let avatarFrame = SvgMarkerImageLoader.centerAvatarFrame(width: width, height: height)
+        let avatarView = UIImageView(frame: avatarFrame)
+        avatarView.tag = avatarTag
+        avatarView.contentMode = .scaleAspectFill
+        avatarView.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        avatarView.layer.cornerRadius = avatarFrame.width / 2
+        avatarView.clipsToBounds = true
+        let hasImage = annotation.svgImagePngData != nil
+            || !(annotation.svgImageUrl ?? "").isEmpty
+        avatarView.isHidden = !hasImage
+        container.addSubview(avatarView)
+
+        container.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
+        return container
     }
 }

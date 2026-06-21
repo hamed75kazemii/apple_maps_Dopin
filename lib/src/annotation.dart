@@ -158,6 +158,7 @@ class Annotation {
     this.glow = false,
     this.glowColor = const Color(0xFFEC30E4),
     this.glowIntensity = 1.0,
+    this.shadow,
     this.dopinMarker,
     this.svgMarker,
   })  : assert(0.0 <= alpha && alpha <= 1.0),
@@ -217,12 +218,16 @@ class Annotation {
   /// Strength of the effect in `0.0`…`1.0` (peak opacity and scale reach).
   final double glowIntensity;
 
+  /// Optional drop shadow (iOS). `null` = no shadow.
+  final MarkerShadow? shadow;
+
   /// When set (iOS), the marker is drawn natively (me / event / dopin / cluster).
   /// Use [onTap] for tap handling; [annotationId] is sent to Flutter on tap.
   final DopinMarker? dopinMarker;
 
   /// When set (iOS), the marker is drawn from the native bundled event pin
-  /// ([SvgMarker]). Pin-shaped icons usually use `anchor: Offset(0.5, 1.0)`.
+  /// ([SvgMarker]). Optional [SvgMarker.imageUrl] fills the pin head circle.
+  /// Pin-shaped icons usually use `anchor: Offset(0.5, 1.0)`.
   final SvgMarker? svgMarker;
 
   /// Creates a new [Annotation] object whose values are the same as this instance,
@@ -242,6 +247,7 @@ class Annotation {
     bool? glowParam,
     Color? glowColorParam,
     double? glowIntensityParam,
+    MarkerShadow? shadowParam,
     DopinMarker? dopinMarkerParam,
     SvgMarker? svgMarkerParam,
   }) {
@@ -260,6 +266,7 @@ class Annotation {
       glow: glowParam ?? glow,
       glowColor: glowColorParam ?? glowColor,
       glowIntensity: glowIntensityParam ?? glowIntensity,
+      shadow: shadowParam ?? shadow,
       dopinMarker: dopinMarkerParam ?? dopinMarker,
       svgMarker: svgMarkerParam ?? svgMarker,
     );
@@ -288,6 +295,9 @@ class Annotation {
       json['glowColor'] = glowColor.value;
       json['glowIntensity'] = glowIntensity;
     }
+    if (shadow != null) {
+      json['shadow'] = shadow!._toJson();
+    }
     if (dopinMarker != null) {
       json['dopinMarker'] = dopinMarker!._toJson();
     }
@@ -314,6 +324,7 @@ class Annotation {
         glow == typedOther.glow &&
         glowColor == typedOther.glowColor &&
         glowIntensity == typedOther.glowIntensity &&
+        shadow == typedOther.shadow &&
         dopinMarker == typedOther.dopinMarker &&
         svgMarker == typedOther.svgMarker;
   }
@@ -332,6 +343,7 @@ class Annotation {
         glow,
         glowColor,
         glowIntensity,
+        shadow,
         dopinMarker,
         svgMarker,
       );

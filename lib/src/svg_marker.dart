@@ -6,14 +6,16 @@ part of apple_maps_flutter;
 
 /// Native event pin marker (iOS).
 ///
-/// The icon is a vector SVG bundled in the plugin's iOS asset catalog and
-/// rendered natively at [width] × [height] points. For pin-shaped icons, use
+/// The pin shape is the bundled SVG; an optional [imageUrl] / [imagePng] is
+/// drawn as a circle in the center of the pin head. For pin-shaped icons, use
 /// `anchor: Offset(0.5, 1.0)` on the parent [Annotation].
 @immutable
 class SvgMarker {
   const SvgMarker({
     this.width = 38,
     this.height = 50,
+    this.imageUrl,
+    this.imagePng,
   });
 
   /// Logical width in points.
@@ -22,10 +24,18 @@ class SvgMarker {
   /// Logical height in points.
   final double height;
 
+  /// Center image URL (remote).
+  final String? imageUrl;
+
+  /// Center image bytes (local).
+  final Uint8List? imagePng;
+
   Map<String, dynamic> _toJson() {
     return <String, dynamic>{
       'width': width,
       'height': height,
+      if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
+      if (imagePng != null) 'imagePng': imagePng,
     };
   }
 
@@ -34,9 +44,26 @@ class SvgMarker {
     if (identical(this, other)) return true;
     if (other is! SvgMarker) return false;
     final SvgMarker o = other;
-    return width == o.width && height == o.height;
+    return width == o.width &&
+        height == o.height &&
+        imageUrl == o.imageUrl &&
+        _bytesEqual(imagePng, o.imagePng);
   }
 
   @override
-  int get hashCode => Object.hash(width, height);
+  int get hashCode => Object.hash(
+        width,
+        height,
+        imageUrl,
+        imagePng?.length,
+      );
+
+  static bool _bytesEqual(Uint8List? a, Uint8List? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null || a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }

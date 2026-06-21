@@ -204,6 +204,9 @@ extension AppleMapController: AnnotationDelegate {
         if let svgView = annotationView as? SvgMarkerAnnotationView {
             svgView.configureIfNeeded()
         }
+        if let flutterView = annotationView as? FlutterAnnotationView {
+            flutterView.applyFlutterMarkerShadow()
+        }
         // If annotation is not visible set alpha to 0 and don't let the user interact with it
         if !annotation.isVisible! {
             annotationView!.canShowCallout = false
@@ -360,12 +363,18 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.isVisible = annotation.isVisible
                 oldAnnotation.title = annotation.title
                 oldAnnotation.subtitle = annotation.subtitle
+                oldAnnotation.markerShadowEnabled = annotation.markerShadowEnabled
+                oldAnnotation.markerShadowColor = annotation.markerShadowColor
+                oldAnnotation.markerShadowBlurRadius = annotation.markerShadowBlurRadius
+                oldAnnotation.markerShadowOffsetX = annotation.markerShadowOffsetX
+                oldAnnotation.markerShadowOffsetY = annotation.markerShadowOffsetY
                 oldAnnotation.usesDopinMarker = annotation.usesDopinMarker
-                oldAnnotation.dopinImageUrl = annotation.dopinImageUrl
+                oldAnnotation.dopinImageUrls = annotation.dopinImageUrls
                 oldAnnotation.dopinImagePngData = annotation.dopinImagePngData
                 oldAnnotation.dopinImageAssetName = annotation.dopinImageAssetName
                 oldAnnotation.dopinImageAssetScale = annotation.dopinImageAssetScale
                 oldAnnotation.dopinMarkerLabel = annotation.dopinMarkerLabel
+                oldAnnotation.dopinMarkerCount = annotation.dopinMarkerCount
                 oldAnnotation.dopinFrameWidth = annotation.dopinFrameWidth
                 oldAnnotation.dopinFrameHeight = annotation.dopinFrameHeight
                 oldAnnotation.dopinBorderWidth = annotation.dopinBorderWidth
@@ -377,6 +386,8 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.usesSvgMarker = annotation.usesSvgMarker
                 oldAnnotation.svgWidth = annotation.svgWidth
                 oldAnnotation.svgHeight = annotation.svgHeight
+                oldAnnotation.svgImageUrl = annotation.svgImageUrl
+                oldAnnotation.svgImagePngData = annotation.svgImagePngData
             })
             
             if let view = self.mapView.view(for: oldAnnotation) {
