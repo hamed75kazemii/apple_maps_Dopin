@@ -236,6 +236,33 @@ enum DopinMarkerImageLoader {
     private static let cache = NSCache<NSString, UIImage>()
     private static var inFlight = [String: [(UIImage?) -> Void]]()
 
+    private static let resourceBundle: Bundle = {
+        let pluginBundle = Bundle(for: DopinMarkerAnnotationView.self)
+        if let url = pluginBundle.url(forResource: "apple_maps_flutter", withExtension: "bundle"),
+           let bundle = Bundle(url: url) {
+            return bundle
+        }
+        return pluginBundle
+    }()
+
+    /// Shown when a remote [imageUrl] fails to load or is invalid.
+    static var blankProfileImage: UIImage? {
+        UIImage(named: "blank_profile", in: resourceBundle, compatibleWith: nil)
+    }
+
+    static func applyProfileImage(_ image: UIImage?, to imageView: UIImageView) {
+        if let image = image {
+            imageView.image = image
+            imageView.backgroundColor = .clear
+        } else if let placeholder = blankProfileImage {
+            imageView.image = placeholder
+            imageView.backgroundColor = .clear
+        } else {
+            imageView.image = nil
+            imageView.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        }
+    }
+
     /// Priority: PNG bytes → asset → first URL (legacy single-image callers).
     static func load(for annotation: FlutterAnnotation, completion: @escaping (UIImage?) -> Void) {
         if let data = annotation.dopinImagePngData,
@@ -260,7 +287,7 @@ enum DopinMarkerImageLoader {
 
     static func load(urlString: String?, completion: @escaping (UIImage?) -> Void) {
         guard let urlString = urlString, !urlString.isEmpty, let url = URL(string: urlString) else {
-            completion(nil)
+            completion(blankProfileImage)
             return
         }
 
@@ -276,13 +303,15 @@ enum DopinMarkerImageLoader {
         }
         inFlight[urlString] = [completion]
 
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            var image: UIImage?
-            if let data = data {
-                image = UIImage(data: data, scale: UIScreen.main.scale)
-                if let image = image {
-                    cache.setObject(image, forKey: key)
-                }
+        URLSession.shared.dataTask(with: url) { data, response, _ in
+            let image: UIImage?
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                image = blankProfileImage
+            } else if let data = data, let decoded = UIImage(data: data, scale: UIScreen.main.scale) {
+                cache.setObject(decoded, forKey: key)
+                image = decoded
+            } else {
+                image = blankProfileImage
             }
             DispatchQueue.main.async {
                 let waiters = inFlight.removeValue(forKey: urlString) ?? []
@@ -373,10 +402,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
                 let imageView = imageViews[index]
                 DopinMarkerImageLoader.load(urlString: url) { [weak self] image in
                     guard let self = self, self.imageLoadToken == token else { return }
-                    if let image = image {
-                        imageView.image = image
-                        imageView.backgroundColor = .clear
-                    }
+                    DopinMarkerImageLoader.applyProfileImage(image, to: imageView)
                 }
             }
             return
@@ -385,10 +411,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         guard let imageView = imageViews.first else { return }
         DopinMarkerImageLoader.load(for: annotation) { [weak self] image in
             guard let self = self, self.imageLoadToken == token else { return }
-            if let image = image {
-                imageView.image = image
-                imageView.backgroundColor = .clear
-            }
+            DopinMarkerImageLoader.applyProfileImage(image, to: imageView)
         }
     }
 
@@ -735,10 +758,7 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         imageLoadToken = token
         SvgMarkerImageLoader.loadCenterImage(for: annotation) { [weak self, weak avatarView] image in
             guard let self = self, let avatarView = avatarView, self.imageLoadToken == token else { return }
-            if let image = image {
-                avatarView.image = image
-                avatarView.backgroundColor = .clear
-            }
+            DopinMarkerImageLoader.applyProfileImage(image, to: avatarView)
         }
     }
 

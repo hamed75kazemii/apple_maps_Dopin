@@ -58,7 +58,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   );
 
   static const List<String> _demoGroupUrls = <String>[
-    'https://i.pravatar.cc/150?img=1',
+    'https://i.pravatar.cklk;c/150?img=1',
     'https://i.pravatar.cc/150?img=2',
     'https://i.pravatar.cc/150?img=3',
     'https://i.pravatar.cc/150?img=4',
@@ -80,7 +80,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   );
 
   static const DopinMarker _singleImageMarker = DopinMarker(
-    imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
+    imageUrls: <String>['https://i.pravatar.kklcc/150?imhhgg=12'],
     // count: 12,
     // label: '1',
     width: 46,
