@@ -205,7 +205,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       onTap: () => _onMarkerTap('marker_event'),
       // glow: true,
       shadow: _demoShadow,
-      svgMarker: const SvgMarker(imageUrl: 'https://i.pravatar.cc/150?img=8'),
+      svgMarker: const SvgMarker(
+        imageUrl: 'https://i.prafggvatar.cc/150?img=8',
+      ),
     ),
   };
 

@@ -247,7 +247,10 @@ enum DopinMarkerImageLoader {
 
     /// Shown when a remote [imageUrl] fails to load or is invalid.
     static var blankProfileImage: UIImage? {
-        UIImage(named: "blank_profile", in: resourceBundle, compatibleWith: nil)
+        if let image = UIImage(named: "blank_profile", in: resourceBundle, compatibleWith: nil) {
+            return image
+        }
+        return UIImage(named: "dopin_fallback", in: resourceBundle, compatibleWith: nil)
     }
 
     static func applyProfileImage(_ image: UIImage?, to imageView: UIImageView) {
@@ -285,9 +288,9 @@ enum DopinMarkerImageLoader {
         load(urlString: annotation.dopinImageUrls.first, completion: completion)
     }
 
-    static func load(urlString: String?, completion: @escaping (UIImage?) -> Void) {
+    static func load(urlString: String?, useBlankFallback: Bool = true, completion: @escaping (UIImage?) -> Void) {
         guard let urlString = urlString, !urlString.isEmpty, let url = URL(string: urlString) else {
-            completion(blankProfileImage)
+            completion(useBlankFallback ? blankProfileImage : nil)
             return
         }
 
@@ -306,12 +309,12 @@ enum DopinMarkerImageLoader {
         URLSession.shared.dataTask(with: url) { data, response, _ in
             let image: UIImage?
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                image = blankProfileImage
+                image = useBlankFallback ? blankProfileImage : nil
             } else if let data = data, let decoded = UIImage(data: data, scale: UIScreen.main.scale) {
                 cache.setObject(decoded, forKey: key)
                 image = decoded
             } else {
-                image = blankProfileImage
+                image = useBlankFallback ? blankProfileImage : nil
             }
             DispatchQueue.main.async {
                 let waiters = inFlight.removeValue(forKey: urlString) ?? []
@@ -640,13 +643,22 @@ enum SvgMarkerImageLoader {
 
     /// Renders the bundled vector SVG at [width]×[height] points (device scale).
     static func eventMarkerImage(width: CGFloat, height: CGFloat) -> UIImage? {
+        renderedVectorImage(named: "event_marker", width: width, height: height)
+    }
+
+    /// Filled pin shown when [SvgMarker] center image fails to load.
+    static func eventFillMarkerImage(width: CGFloat, height: CGFloat) -> UIImage? {
+        renderedVectorImage(named: "event_fill_marker", width: width, height: height)
+    }
+
+    private static func renderedVectorImage(named name: String, width: CGFloat, height: CGFloat) -> UIImage? {
         let scale = UIScreen.main.scale
-        let key = "event_marker|\(width)|\(height)|\(scale)" as NSString
+        let key = "\(name)|\(width)|\(height)|\(scale)" as NSString
         if let cached = cache.object(forKey: key) {
             return cached
         }
 
-        guard let vector = UIImage(named: "event_marker", in: resourceBundle, compatibleWith: nil) else {
+        guard let vector = UIImage(named: name, in: resourceBundle, compatibleWith: nil) else {
             return nil
         }
 
@@ -675,7 +687,11 @@ enum SvgMarkerImageLoader {
             completion(image)
             return
         }
-        DopinMarkerImageLoader.load(urlString: annotation.svgImageUrl, completion: completion)
+        DopinMarkerImageLoader.load(
+            urlString: annotation.svgImageUrl,
+            useBlankFallback: false,
+            completion: completion
+        )
     }
 }
 
@@ -745,20 +761,40 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     private func loadCenterImage(into content: UIView, annotation: FlutterAnnotation) {
-        guard let avatarView = content.viewWithTag(Self.avatarTag) as? UIImageView else { return }
+        guard let pinView = content.viewWithTag(Self.pinTag) as? UIImageView,
+              let avatarView = content.viewWithTag(Self.avatarTag) as? UIImageView else { return }
+
+        let width = annotation.svgWidth
+        let height = annotation.svgHeight
         let hasImage = annotation.svgImagePngData != nil
             || (annotation.svgImageUrl?.isEmpty == false)
+
         guard hasImage else {
             avatarView.isHidden = true
+            pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
             return
         }
 
         avatarView.isHidden = false
+        pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+
         let token = annotation.svgMarkerSignature
         imageLoadToken = token
-        SvgMarkerImageLoader.loadCenterImage(for: annotation) { [weak self, weak avatarView] image in
-            guard let self = self, let avatarView = avatarView, self.imageLoadToken == token else { return }
-            DopinMarkerImageLoader.applyProfileImage(image, to: avatarView)
+        SvgMarkerImageLoader.loadCenterImage(for: annotation) { [weak self, weak pinView, weak avatarView] image in
+            guard let self = self,
+                  let pinView = pinView,
+                  let avatarView = avatarView,
+                  self.imageLoadToken == token else { return }
+
+            if let image = image {
+                avatarView.isHidden = false
+                avatarView.image = image
+                avatarView.backgroundColor = .clear
+                pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+            } else {
+                avatarView.isHidden = true
+                pinView.image = SvgMarkerImageLoader.eventFillMarkerImage(width: width, height: height)
+            }
         }
     }
 
