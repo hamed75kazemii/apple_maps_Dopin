@@ -45,20 +45,16 @@ Annotation(
 Annotation(
   annotationId: AnnotationId('user_1'),
   position: LatLng(lat, lng),
-  shadow: const MarkerShadow(
-    color: Color(0x40000000),
-    blurRadius: 4,
-    offset: Offset(0, 2),
-  ),
+  shadow: const MarkerShadow(),
   dopinMarker: DopinMarker(imageUrls: [avatarUrl]),
 ),
 ```
 
 | فیلد | پیش‌فرض | توضیح |
 |------|---------|--------|
-| `color` | `0x40000000` | رنگ سایه (alpha = شدت) |
-| `blurRadius` | `4` | میزان بلور |
-| `offset` | `(0, 2)` | جابه‌جایی سایه |
+| `color` | `0x4D000000` | رنگ سایه (alpha = شدت، ۳۰٪ مشکی) |
+| `blurRadius` | `18` | میزان بلور |
+| `offset` | `(0, 4)` | جابه‌جایی سایه |
 
 ## چیدمان چند تصویر (`imageUrls`)
 

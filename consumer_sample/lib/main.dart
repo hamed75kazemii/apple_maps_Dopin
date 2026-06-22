@@ -73,11 +73,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     'https://i.pravatar.cc/150?img=3',
   ];
   static const Color _labelColor = Color(0xFF7B2CBF);
-  static const MarkerShadow _demoShadow = MarkerShadow(
-    color: Color(0x40000000),
-    blurRadius: 4,
-    offset: Offset(0, 2),
-  );
+  static const MarkerShadow _demoShadow = MarkerShadow();
 
   static const DopinMarker _singleImageMarker = DopinMarker(
     imageUrls: <String>['https://i.pravatar.kklcc/150?imhhgg=12'],
@@ -206,7 +202,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       // glow: true,
       shadow: _demoShadow,
       svgMarker: const SvgMarker(
-        imageUrl: 'https://i.prafggvatar.cc/150?img=8',
+        //    imageUrl: 'https://i.prafggvatar.cc/150?img=8',
       ),
     ),
   };

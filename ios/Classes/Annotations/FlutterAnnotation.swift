@@ -31,10 +31,10 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var glowIntensity: Double = 1.0
 
     var markerShadowEnabled: Bool = false
-    var markerShadowColor: UIColor = UIColor.black.withAlphaComponent(0.25)
-    var markerShadowBlurRadius: CGFloat = 4
+    var markerShadowColor: UIColor = UIColor.black.withAlphaComponent(0.3)
+    var markerShadowBlurRadius: CGFloat = 18
     var markerShadowOffsetX: CGFloat = 0
-    var markerShadowOffsetY: CGFloat = 2
+    var markerShadowOffsetY: CGFloat = 4
 
     var usesDopinMarker: Bool = false
     var dopinImageUrls: [String] = []

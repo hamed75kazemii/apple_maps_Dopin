@@ -8,9 +8,9 @@ part of apple_maps_flutter;
 @immutable
 class MarkerShadow {
   const MarkerShadow({
-    this.color = const Color(0x40000000),
-    this.blurRadius = 4,
-    this.offset = const Offset(0, 2),
+    this.color = const Color(0x4D000000),
+    this.blurRadius = 18,
+    this.offset = const Offset(0, 4),
   }) : assert(blurRadius >= 0);
 
   /// Shadow color; alpha controls opacity.

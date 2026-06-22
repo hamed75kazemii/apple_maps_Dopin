@@ -771,7 +771,7 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
 
         guard hasImage else {
             avatarView.isHidden = true
-            pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+            pinView.image = SvgMarkerImageLoader.eventFillMarkerImage(width: width, height: height)
             return
         }
 
@@ -807,7 +807,11 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         let pinView = UIImageView(frame: container.bounds)
         pinView.tag = pinTag
         pinView.contentMode = .scaleToFill
-        pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+        let hasImage = annotation.svgImagePngData != nil
+            || !(annotation.svgImageUrl ?? "").isEmpty
+        pinView.image = hasImage
+            ? SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+            : SvgMarkerImageLoader.eventFillMarkerImage(width: width, height: height)
         container.addSubview(pinView)
 
         let avatarFrame = SvgMarkerImageLoader.centerAvatarFrame(width: width, height: height)
@@ -817,8 +821,6 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         avatarView.backgroundColor = UIColor(white: 0.92, alpha: 1)
         avatarView.layer.cornerRadius = avatarFrame.width / 2
         avatarView.clipsToBounds = true
-        let hasImage = annotation.svgImagePngData != nil
-            || !(annotation.svgImageUrl ?? "").isEmpty
         avatarView.isHidden = !hasImage
         container.addSubview(avatarView)
 
