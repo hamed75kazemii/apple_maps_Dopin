@@ -455,6 +455,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
             AppleMap(
               initialCameraPosition: _losAngeles,
               mapType: MapType.standard,
+              showPointsOfInterest: false,
               globeAtMinZoom: true,
               minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
               scrollGesturesEnabled: gesturesEnabled,
@@ -465,7 +466,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
                 _controller = controller;
               },
               annotations: _annotations,
-              onPOITap: _onPoiTap,
+              //    onPOITap: _onPoiTap,
               onTap: _onMapTap,
               onCameraMove: _onCameraMove,
               onCameraIdle: _onCameraIdle,

@@ -32,6 +32,7 @@ class AppleMap extends StatefulWidget {
     this.gestureRecognizers,
     this.compassEnabled = true,
     this.trafficEnabled = false,
+    this.showPointsOfInterest = true,
     this.mapType = MapType.standard,
     this.globeAtMinZoom = false,
     this.minMaxZoomPreference = MinMaxZoomPreference.unbounded,
@@ -67,6 +68,9 @@ class AppleMap extends StatefulWidget {
 
   /// True if the map should display the current traffic.
   final bool trafficEnabled;
+
+  /// True if built-in Apple Maps POI labels (cafes, shops, …) should be shown.
+  final bool showPointsOfInterest;
 
   /// Type of map tiles to be rendered.
   final MapType mapType;
@@ -381,6 +385,7 @@ class _AppleMapOptions {
     this.padding,
     this.insetsLayoutMarginsFromSafeArea,
     this.poiTapEnabled,
+    this.showPointsOfInterest,
   });
 
   static _AppleMapOptions fromWidget(AppleMap map) {
@@ -400,6 +405,7 @@ class _AppleMapOptions {
       padding: map.padding,
       insetsLayoutMarginsFromSafeArea: map.insetsLayoutMarginsFromSafeArea,
       poiTapEnabled: map.onPOITap != null,
+      showPointsOfInterest: map.showPointsOfInterest,
     );
   }
 
@@ -434,6 +440,9 @@ class _AppleMapOptions {
   /// Whether built-in Apple Maps POI labels should accept user taps (iOS 17+).
   final bool? poiTapEnabled;
 
+  /// Whether built-in Apple Maps POI labels are visible on the map.
+  final bool? showPointsOfInterest;
+
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> optionsMap = <String, dynamic>{};
 
@@ -459,6 +468,7 @@ class _AppleMapOptions {
     addIfNonNull(
         'insetsLayoutMarginsFromSafeArea', insetsLayoutMarginsFromSafeArea);
     addIfNonNull('poiTapEnabled', poiTapEnabled);
+    addIfNonNull('showPointsOfInterest', showPointsOfInterest);
     return optionsMap;
   }
 

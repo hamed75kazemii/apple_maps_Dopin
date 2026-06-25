@@ -253,8 +253,28 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             self.applyPOITapInteraction(enabled: poiTapEnabled)
         }
 
+        if let showPOI: Bool = options["showPointsOfInterest"] as? Bool {
+            self.showsPointsOfInterest = showPOI
+            self.applyPointsOfInterestVisibility()
+        }
+
     }
-    
+
+    func applyPointsOfInterestVisibility() {
+        if #available(iOS 16.0, *) {
+            let index = isAutoGlobeActive
+                ? FlutterMapView.hybridFlyoverMapTypeIndex
+                : userRequestedMapTypeIndex
+            applyMapType(index: index)
+            return
+        }
+        if #available(iOS 13.0, *) {
+            self.pointOfInterestFilter = showsPointsOfInterest
+                ? MKPointOfInterestFilter.includingAll
+                : MKPointOfInterestFilter.excludingAll
+        }
+    }
+
     func setUserLocation() {
         let authorizationStatus = CLLocationManager.authorizationStatus()
         
@@ -374,22 +394,43 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     func applyMapType(index: Int) {
         prefersGlobeProjection = index >= 3
         if #available(iOS 16.0, *) {
+            let poiFilter: MKPointOfInterestFilter? = {
+                if #available(iOS 13.0, *) {
+                    return showsPointsOfInterest
+                        ? MKPointOfInterestFilter.includingAll
+                        : MKPointOfInterestFilter.excludingAll
+                }
+                return nil
+            }()
             switch index {
             case 0:
-                preferredConfiguration = MKStandardMapConfiguration()
+                let config = MKStandardMapConfiguration()
+                if let poiFilter = poiFilter {
+                    config.pointOfInterestFilter = poiFilter
+                }
+                preferredConfiguration = config
             case 1:
                 preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .flat)
             case 2:
-                preferredConfiguration = MKHybridMapConfiguration(elevationStyle: .flat)
+                let config = MKHybridMapConfiguration(elevationStyle: .flat)
+                if let poiFilter = poiFilter {
+                    config.pointOfInterestFilter = poiFilter
+                }
+                preferredConfiguration = config
             case 3:
                 preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .realistic)
             case 4:
-                preferredConfiguration = MKHybridMapConfiguration(elevationStyle: .realistic)
+                let config = MKHybridMapConfiguration(elevationStyle: .realistic)
+                if let poiFilter = poiFilter {
+                    config.pointOfInterestFilter = poiFilter
+                }
+                preferredConfiguration = config
             default:
                 break
             }
         } else if index < mapTypes.count {
             self.mapType = mapTypes[index]
+            applyPointsOfInterestVisibility()
         }
     }
 
