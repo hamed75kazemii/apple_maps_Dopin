@@ -80,7 +80,13 @@ extension AppleMapController: PolygonDelegate {
     }
     
     private func addPolygon(polygon: FlutterPolygon) {
-        if polygon.zIndex == nil || polygon.zIndex == -1 {
+        if #available(iOS 13.0, *) {
+            if polygon.zIndex == nil || polygon.zIndex == -1 {
+                self.mapView.addOverlay(polygon, level: .aboveRoads)
+            } else {
+                self.mapView.insertOverlay(polygon, at: polygon.zIndex ?? 0, level: .aboveRoads)
+            }
+        } else if polygon.zIndex == nil || polygon.zIndex == -1 {
             self.mapView.addOverlay(polygon)
         } else {
             self.mapView.insertOverlay(polygon, at: polygon.zIndex ?? 0)

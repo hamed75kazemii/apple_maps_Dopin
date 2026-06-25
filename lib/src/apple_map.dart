@@ -34,6 +34,7 @@ class AppleMap extends StatefulWidget {
     this.trafficEnabled = false,
     this.showPointsOfInterest = true,
     this.mapType = MapType.standard,
+    this.elevationStyle = ElevationStyle.flat,
     this.globeAtMinZoom = false,
     this.minMaxZoomPreference = MinMaxZoomPreference.unbounded,
     this.trackingMode = TrackingMode.none,
@@ -74,6 +75,10 @@ class AppleMap extends StatefulWidget {
 
   /// Type of map tiles to be rendered.
   final MapType mapType;
+
+  /// Terrain and road elevation style. Requires iOS 16+ and A12 or later for
+  /// [ElevationStyle.realistic].
+  final ElevationStyle elevationStyle;
 
   /// When true and [mapType] is [MapType.standard], zooming out to the minimum
   /// level switches to hybrid flyover so the 3D globe is shown (iOS only).
@@ -373,6 +378,7 @@ class _AppleMapOptions {
     this.compassEnabled,
     this.trafficEnabled,
     this.mapType,
+    this.elevationStyle,
     this.globeAtMinZoom,
     this.minMaxZoomPreference,
     this.rotateGesturesEnabled,
@@ -393,6 +399,7 @@ class _AppleMapOptions {
       compassEnabled: map.compassEnabled,
       trafficEnabled: map.trafficEnabled,
       mapType: map.mapType,
+      elevationStyle: map.elevationStyle,
       globeAtMinZoom: map.globeAtMinZoom,
       minMaxZoomPreference: map.minMaxZoomPreference,
       rotateGesturesEnabled: map.rotateGesturesEnabled,
@@ -414,6 +421,8 @@ class _AppleMapOptions {
   final bool? trafficEnabled;
 
   final MapType? mapType;
+
+  final ElevationStyle? elevationStyle;
 
   final bool? globeAtMinZoom;
 
@@ -455,6 +464,7 @@ class _AppleMapOptions {
     addIfNonNull('compassEnabled', compassEnabled);
     addIfNonNull('trafficEnabled', trafficEnabled);
     addIfNonNull('mapType', mapType?.index);
+    addIfNonNull('elevationStyle', elevationStyle?.index);
     addIfNonNull('globeAtMinZoom', globeAtMinZoom);
     addIfNonNull('minMaxZoomPreference', minMaxZoomPreference?._toJson());
     addIfNonNull('rotateGesturesEnabled', rotateGesturesEnabled);

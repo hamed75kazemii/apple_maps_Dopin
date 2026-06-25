@@ -55,6 +55,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   static const CameraPosition _losAngeles = CameraPosition(
     target: LatLng(34.0522, -118.2437),
     zoom: 12,
+    pitch: 60,
   );
 
   static const List<String> _demoGroupUrls = <String>[
@@ -445,6 +446,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
             AppleMap(
               initialCameraPosition: _losAngeles,
               mapType: MapType.standard,
+              elevationStyle: ElevationStyle.realistic,
+
               //  showPointsOfInterest: false,
               globeAtMinZoom: true,
               minMaxZoomPreference: const MinMaxZoomPreference(0, 21),

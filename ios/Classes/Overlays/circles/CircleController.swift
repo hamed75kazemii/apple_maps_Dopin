@@ -39,7 +39,13 @@ extension AppleMapController: CircleDelegate {
     }
     
     private func addCircle(circle: FlutterCircle) {
-        if circle.zIndex == nil || circle.zIndex == -1 {
+        if #available(iOS 13.0, *) {
+            if circle.zIndex == nil || circle.zIndex == -1 {
+                self.mapView.addOverlay(circle, level: .aboveRoads)
+            } else {
+                self.mapView.insertOverlay(circle, at: circle.zIndex ?? 0, level: .aboveRoads)
+            }
+        } else if circle.zIndex == nil || circle.zIndex == -1 {
             self.mapView.addOverlay(circle)
         } else {
             self.mapView.insertOverlay(circle, at: circle.zIndex ?? 0)

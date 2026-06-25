@@ -23,6 +23,15 @@ enum MapType {
   hybridFlyover,
 }
 
+/// Controls MapKit terrain and road elevation rendering (iOS 16+).
+enum ElevationStyle {
+  /// Flat ground, bridges, and roads (MapKit default).
+  flat,
+
+  /// Real-world terrain, hills, and elevated road details.
+  realistic,
+}
+
 enum TrackingMode {
   // the user's location is not followed
   none,

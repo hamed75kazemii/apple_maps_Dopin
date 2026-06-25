@@ -42,6 +42,9 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     /// Map type index requested from Flutter ([MapType] enum).
     var userRequestedMapTypeIndex: Int = 0
 
+    /// Flutter [ElevationStyle] index: 0 = flat, 1 = realistic.
+    var elevationStyleIndex: Int = 0
+
     private var isAutoGlobeActive: Bool = false
 
     private static let globeZoomThreshold: Double = 2.5
@@ -184,6 +187,10 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             }
         }
 
+        if let elevationStyle: Int = options["elevationStyle"] as? Int {
+            elevationStyleIndex = elevationStyle
+        }
+
         if let mapType: Int = options["mapType"] as? Int {
             userRequestedMapTypeIndex = mapType
             if mapType != FlutterMapView.standardMapTypeIndex {
@@ -192,6 +199,11 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             } else if !isAutoGlobeActive {
                 applyMapType(index: mapType)
             }
+        } else if options["elevationStyle"] != nil {
+            let index = isAutoGlobeActive
+                ? FlutterMapView.hybridFlyoverMapTypeIndex
+                : userRequestedMapTypeIndex
+            applyMapType(index: index)
         }
         
         if let trafficEnabled: Bool = options["trafficEnabled"] as? Bool {
@@ -391,10 +403,16 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         channel?.invokeMethod("camera#onMove", arguments: ["position": ["heading": heading, "target":  [locationOnMap.latitude, locationOnMap.longitude], "pitch": pitch, "zoom": zoom]])
     }
 
+    @available(iOS 16.0, *)
+    private func mapKitElevationStyle() -> MKMapConfiguration.ElevationStyle {
+        elevationStyleIndex == 1 ? .realistic : .flat
+    }
+
     /// Applies a [MapType] index to MapKit (configuration API on iOS 16+, legacy mapType below).
     func applyMapType(index: Int) {
         prefersGlobeProjection = index >= 3
         if #available(iOS 16.0, *) {
+            let elevation = mapKitElevationStyle()
             let poiFilter: MKPointOfInterestFilter? = {
                 if #available(iOS 13.0, *) {
                     return showsPointsOfInterest
@@ -405,23 +423,23 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             }()
             switch index {
             case 0:
-                let config = MKStandardMapConfiguration()
+                let config = MKStandardMapConfiguration(elevationStyle: elevation)
                 if let poiFilter = poiFilter {
                     config.pointOfInterestFilter = poiFilter
                 }
                 preferredConfiguration = config
             case 1:
-                preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .flat)
+                preferredConfiguration = MKImageryMapConfiguration(elevationStyle: elevation)
             case 2:
-                let config = MKHybridMapConfiguration(elevationStyle: .flat)
+                let config = MKHybridMapConfiguration(elevationStyle: elevation)
                 if let poiFilter = poiFilter {
                     config.pointOfInterestFilter = poiFilter
                 }
                 preferredConfiguration = config
             case 3:
-                preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .realistic)
+                preferredConfiguration = MKImageryMapConfiguration(elevationStyle: elevation)
             case 4:
-                let config = MKHybridMapConfiguration(elevationStyle: .realistic)
+                let config = MKHybridMapConfiguration(elevationStyle: elevation)
                 if let poiFilter = poiFilter {
                     config.pointOfInterestFilter = poiFilter
                 }

@@ -82,7 +82,13 @@ extension AppleMapController: PolylineDelegate {
     }
     
     private func addPolyline(polyline: FlutterPolyline) {
-        if polyline.zIndex == nil || polyline.zIndex == -1 {
+        if #available(iOS 13.0, *) {
+            if polyline.zIndex == nil || polyline.zIndex == -1 {
+                self.mapView.addOverlay(polyline, level: .aboveRoads)
+            } else {
+                self.mapView.insertOverlay(polyline, at: polyline.zIndex ?? 0, level: .aboveRoads)
+            }
+        } else if polyline.zIndex == nil || polyline.zIndex == -1 {
             self.mapView.addOverlay(polyline)
         } else {
             self.mapView.insertOverlay(polyline, at: polyline.zIndex ?? 0)
