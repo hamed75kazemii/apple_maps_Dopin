@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer';
-import 'dart:math' as math;
 
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:flutter/foundation.dart'
@@ -35,7 +34,8 @@ class MapSmokeTestScreen extends StatefulWidget {
   State<MapSmokeTestScreen> createState() => _MapSmokeTestScreenState();
 }
 
-class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
+class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
+    with SingleTickerProviderStateMixin {
   AppleMapController? _controller;
   String _status = 'Tap a POI on the map to enter focus mode';
   ApplePOIDetail? _focusedPoi;
@@ -244,25 +244,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     return EdgeInsets.only(top: height * 0.05, bottom: height * 0.52);
   }
 
-  LatLng _offsetCenterForPadding(
-    LatLng center,
-    EdgeInsets padding,
-    double zoom,
-  ) {
-    final verticalPixelOffset = (padding.bottom - padding.top) / 2;
-    if (verticalPixelOffset.abs() <= 0.5) return center;
-
-    final metersPerPixel =
-        156543.03392 *
-        math.cos(center.latitude * math.pi / 180) /
-        math.pow(2, zoom);
-    final latitudeDelta = (verticalPixelOffset * metersPerPixel) / 111320;
-    return LatLng(
-      (center.latitude - latitudeDelta).clamp(-85.0, 85.0),
-      center.longitude,
-    );
-  }
-
   Future<void> _startFocusOrbit(ApplePOIDetail poi) async {
     final controller = _controller;
     if (controller == null || !_isFocused) return;
@@ -312,7 +293,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     }
 
     final padding = _focusPadding(context);
-    _verticalScreenOffset = (padding.bottom - padding.top) / 2;
+    _verticalScreenOffset = MapCameraPadding.verticalScreenOffset(padding);
 
     final currentZoom = await controller.getZoomLevel();
     final focusZoom = (currentZoom ?? _minFocusZoom)
@@ -330,19 +311,19 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       _lastTappedMarkerId = null;
     });
 
-    final flyTarget = _offsetCenterForPadding(location, padding, focusZoom);
     try {
-      await controller.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: flyTarget,
-            zoom: focusZoom,
-            pitch: _focusPitchMin,
-            heading: 0,
-          ),
+      await runOrbitFrameCameraTransition(
+        vsync: this,
+        controller: controller,
+        anchor: location,
+        target: OrbitFrameCameraTarget(
+          padding: padding,
+          zoom: focusZoom,
+          pitch: _focusPitchMin,
         ),
+        start: _cameraBeforeFocus ?? _lastCameraPosition,
+        duration: _focusFlyDuration,
       );
-      await _waitForCameraIdle();
     } finally {
       if (mounted) {
         setState(() => _focusTransitionActive = false);
@@ -455,7 +436,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
             AppleMap(
               initialCameraPosition: _losAngeles,
               mapType: MapType.standard,
-              showPointsOfInterest: false,
+              //  showPointsOfInterest: false,
               globeAtMinZoom: true,
               minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
               scrollGesturesEnabled: gesturesEnabled,

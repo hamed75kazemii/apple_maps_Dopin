@@ -240,14 +240,18 @@ class AppleMapController {
     required double zoom,
     required double pitch,
     required double bearing,
+    EdgeInsets? padding,
     double verticalScreenOffset = 0.0,
   }) async {
+    final offset = padding != null
+        ? MapCameraPadding.verticalScreenOffset(padding)
+        : verticalScreenOffset;
     await channel.invokeMethod<void>('camera#setOrbitFrame', <String, dynamic>{
       'center': <double>[center.latitude, center.longitude],
       'zoom': zoom,
       'pitch': pitch,
       'bearing': bearing,
-      'verticalScreenOffset': verticalScreenOffset,
+      'verticalScreenOffset': offset,
     });
   }
 

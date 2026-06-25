@@ -25,6 +25,8 @@ part 'src/bitmap.dart';
 part 'src/cap.dart';
 part 'src/callbacks.dart';
 part 'src/camera.dart';
+part 'src/map_camera_padding.dart';
+part 'src/orbit_frame_camera_transition.dart';
 part 'src/circle.dart';
 part 'src/circle_updates.dart';
 part 'src/controller.dart';
