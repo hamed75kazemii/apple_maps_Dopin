@@ -61,6 +61,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         self.options = options
         initialiseTapGestureRecognizers()
         self.applyPOITapInteraction(enabled: Self.poiTapEnabled(from: options))
+        self.overrideUserInterfaceStyle = .light
         self.interpretOptions(options: options)
     }
 

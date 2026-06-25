@@ -466,7 +466,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
                 _controller = controller;
               },
               annotations: _annotations,
-              //    onPOITap: _onPoiTap,
+              onPOITap: _onPoiTap,
               onTap: _onMapTap,
               onCameraMove: _onCameraMove,
               onCameraIdle: _onCameraIdle,

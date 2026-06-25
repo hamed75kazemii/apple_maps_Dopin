@@ -235,6 +235,22 @@ class AppleMapController {
   /// orbit runs, starting at [pitchMin]. Otherwise [pitch] stays fixed.
   ///
   /// Call [stopCameraOrbit] to end the orbit.
+  Future<void> setOrbitFrame({
+    required LatLng center,
+    required double zoom,
+    required double pitch,
+    required double bearing,
+    double verticalScreenOffset = 0.0,
+  }) async {
+    await channel.invokeMethod<void>('camera#setOrbitFrame', <String, dynamic>{
+      'center': <double>[center.latitude, center.longitude],
+      'zoom': zoom,
+      'pitch': pitch,
+      'bearing': bearing,
+      'verticalScreenOffset': verticalScreenOffset,
+    });
+  }
+
   Future<void> startCameraOrbit({
     required LatLng center,
     required double zoom,

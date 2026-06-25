@@ -129,6 +129,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     self.startOrbit(args: args)
                     result(nil)
                     break
+                case "camera#setOrbitFrame":
+                    self.setOrbitFrame(args: args)
+                    result(nil)
+                    break
                 case "camera#convert":
                     self.cameraConvert(args: args, result: result)
                     break
@@ -292,6 +296,24 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         let link = CADisplayLink(target: self, selector: #selector(self.onOrbitTick(_:)))
         link.add(to: .main, forMode: .common)
         self.orbitDisplayLink = link
+    }
+
+    /// Positions the camera using the same native math as the first orbit frame,
+    /// without starting the display-link sweep.
+    private func setOrbitFrame(args: Dictionary<String, Any>) -> Void {
+        guard let centerList = args["center"] as? Array<Double>, centerList.count == 2 else { return }
+        let center = CLLocationCoordinate2D(latitude: centerList[0], longitude: centerList[1])
+        let zoom = args["zoom"] as? Double ?? self.mapView.zoomLevel
+        let pitch = CGFloat(args["pitch"] as? Double ?? Double(self.mapView.camera.pitch))
+        let heading = args["bearing"] as? Double ?? Double(self.mapView.actualHeading)
+        let verticalScreenOffset = args["verticalScreenOffset"] as? Double ?? 0.0
+        self.mapView.setOrbitCamera(
+            center: center,
+            zoomLevel: zoom,
+            pitch: pitch,
+            heading: heading,
+            verticalScreenOffset: verticalScreenOffset
+        )
     }
 
     /// Returns the pitch for the current orbit frame. When a valid oscillation
