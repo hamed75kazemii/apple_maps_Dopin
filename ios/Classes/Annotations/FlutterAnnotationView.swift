@@ -63,6 +63,13 @@ class GlowFlutterAnnotationView: FlutterAnnotationView {
 
     private var lastGlowSignature: String?
 
+    private static func glowCenter(in bounds: CGRect, anchor: Offset) -> CGPoint {
+        CGPoint(
+            x: bounds.minX + bounds.width * CGFloat(anchor.x),
+            y: bounds.minY + bounds.height * CGFloat(anchor.y)
+        )
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         lastGlowSignature = nil
@@ -81,7 +88,7 @@ class GlowFlutterAnnotationView: FlutterAnnotationView {
         guard let flutterAnnotation = annotation as? FlutterAnnotation, flutterAnnotation.glow else { return }
 
         let side = Self.glowSide
-        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let center = Self.glowCenter(in: bounds, anchor: flutterAnnotation.glowAnchor)
 
         let argb = flutterAnnotation.glowColorArgb
         let a = CGFloat((argb >> 24) & 0xFF) / 255.0

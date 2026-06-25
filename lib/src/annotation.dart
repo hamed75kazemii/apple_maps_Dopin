@@ -158,6 +158,7 @@ class Annotation {
     this.glow = false,
     this.glowColor = const Color(0xFFEC30E4),
     this.glowIntensity = 1.0,
+    this.glowAnchor = const Offset(0.5, 0.5),
     this.shadow,
     this.dopinMarker,
     this.svgMarker,
@@ -218,6 +219,12 @@ class Annotation {
   /// Strength of the effect in `0.0`…`1.0` (peak opacity and scale reach).
   final double glowIntensity;
 
+  /// Normalized point on the marker bounds where glow pulses originate.
+  ///
+  /// Uses the same coordinate system as [anchor]: `(0, 0)` is the top-left
+  /// corner of the marker image and `(1, 1)` is the bottom-right corner.
+  final Offset glowAnchor;
+
   /// Optional drop shadow (iOS). `null` = no shadow.
   final MarkerShadow? shadow;
 
@@ -247,6 +254,7 @@ class Annotation {
     bool? glowParam,
     Color? glowColorParam,
     double? glowIntensityParam,
+    Offset? glowAnchorParam,
     MarkerShadow? shadowParam,
     DopinMarker? dopinMarkerParam,
     SvgMarker? svgMarkerParam,
@@ -266,6 +274,7 @@ class Annotation {
       glow: glowParam ?? glow,
       glowColor: glowColorParam ?? glowColor,
       glowIntensity: glowIntensityParam ?? glowIntensity,
+      glowAnchor: glowAnchorParam ?? glowAnchor,
       shadow: shadowParam ?? shadow,
       dopinMarker: dopinMarkerParam ?? dopinMarker,
       svgMarker: svgMarkerParam ?? svgMarker,
@@ -294,6 +303,7 @@ class Annotation {
     if (glow) {
       json['glowColor'] = glowColor.value;
       json['glowIntensity'] = glowIntensity;
+      json['glowAnchor'] = _offsetToJson(glowAnchor);
     }
     if (shadow != null) {
       json['shadow'] = shadow!._toJson();
@@ -324,6 +334,7 @@ class Annotation {
         glow == typedOther.glow &&
         glowColor == typedOther.glowColor &&
         glowIntensity == typedOther.glowIntensity &&
+        glowAnchor == typedOther.glowAnchor &&
         shadow == typedOther.shadow &&
         dopinMarker == typedOther.dopinMarker &&
         svgMarker == typedOther.svgMarker;
@@ -343,6 +354,7 @@ class Annotation {
         glow,
         glowColor,
         glowIntensity,
+        glowAnchor,
         shadow,
         dopinMarker,
         svgMarker,

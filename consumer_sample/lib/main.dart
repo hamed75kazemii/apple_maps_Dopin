@@ -85,6 +85,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     borderColor: Colors.white,
     borderRadius: 12,
     labelColor: _labelColor,
+    label: 'Me'
   );
 
   static const DopinMarker _dualImageMarker = DopinMarker(
@@ -137,6 +138,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       shadow: _demoShadow,
       dopinMarker: _singleImageMarker,
       glow: true,
+      // Avatar center: x = 46/2, y = 46/2 inside total height 46 + 18 - 8 = 56.
+      glowAnchor: const Offset(0.5, 23 / 56),
     ),
     Annotation(
       annotationId: const AnnotationId('marker_dual'),
