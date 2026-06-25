@@ -136,6 +136,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       onTap: () => _onMarkerTap('marker_single'),
       shadow: _demoShadow,
       dopinMarker: _singleImageMarker,
+      glow: true,
     ),
     Annotation(
       annotationId: const AnnotationId('marker_dual'),

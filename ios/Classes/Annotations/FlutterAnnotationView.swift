@@ -44,18 +44,35 @@ class FlutterAnnotationView: MKAnnotationView {
 /// Glow pulse behind custom bitmap or [DopinMarkerAnnotationView] markers when [FlutterAnnotation.glow] is true.
 class GlowFlutterAnnotationView: FlutterAnnotationView {
 
-    private static let glowSubviewTag = 9_133_701
+    private static let glowPulseTagBase = 9_133_710
     /// Fixed halo size in points (see layout).
     private static let glowSide: CGFloat = 40
-    /// Rounded square at pulse start; animates up to a full circle (`glowSide / 2`).
-    private static let glowCornerRadiusStart: CGFloat = 12
+    /// Visual (size, borderRadius) keyframes for each pulse; layer cornerRadius is derived from scale.
+    private static let glowPulseKeyframes: [(size: CGFloat, borderRadius: CGFloat)] = [
+        (40, 12),
+        (52, 17),
+        (64, 21),
+        (81, 30),
+    ]
+    /// Overlapping pulse rings; stagger keeps several visible at once.
+    private static let glowPulseCount = 6
+    /// Slow outward expansion per ring.
+    private static let glowPulseDuration: CFTimeInterval = 2.8
+    /// Short gap between ring starts (high frequency, overlapping slow pulses).
+    private static let glowPulseStagger: CFTimeInterval = 0.7
 
     private var lastGlowSignature: String?
 
     override func prepareForReuse() {
         super.prepareForReuse()
         lastGlowSignature = nil
-        viewWithTag(Self.glowSubviewTag)?.removeFromSuperview()
+        removeGlowPulseSubviews()
+    }
+
+    private func removeGlowPulseSubviews() {
+        for index in 0..<Self.glowPulseCount {
+            viewWithTag(Self.glowPulseTagBase + index)?.removeFromSuperview()
+        }
     }
 
     override func layoutSubviews() {
@@ -63,21 +80,8 @@ class GlowFlutterAnnotationView: FlutterAnnotationView {
         guard bounds.width > 1, bounds.height > 1 else { return }
         guard let flutterAnnotation = annotation as? FlutterAnnotation, flutterAnnotation.glow else { return }
 
-        let glow: UIView
-        if let existing = viewWithTag(Self.glowSubviewTag) as? UIView {
-            glow = existing
-        } else {
-            glow = UIView()
-            glow.tag = Self.glowSubviewTag
-            glow.isUserInteractionEnabled = false
-            glow.layer.masksToBounds = true
-            insertSubview(glow, at: 0)
-        }
-
         let side = Self.glowSide
-        glow.layer.masksToBounds = true
-        glow.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        glow.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
 
         let argb = flutterAnnotation.glowColorArgb
         let a = CGFloat((argb >> 24) & 0xFF) / 255.0
@@ -86,46 +90,119 @@ class GlowFlutterAnnotationView: FlutterAnnotationView {
         let b = CGFloat(argb & 0xFF) / 255.0
         let intensity = CGFloat(min(max(flutterAnnotation.glowIntensity, 0), 1))
         let fillAlpha = a * 0.55 * intensity
-        glow.backgroundColor = UIColor(red: r, green: g, blue: b, alpha: fillAlpha)
+
+        for index in 0..<Self.glowPulseCount {
+            let tag = Self.glowPulseTagBase + index
+            let glow: UIView
+            if let existing = viewWithTag(tag) as? UIView {
+                glow = existing
+            } else {
+                glow = UIView()
+                glow.tag = tag
+                glow.isUserInteractionEnabled = false
+                glow.layer.masksToBounds = true
+                insertSubview(glow, at: 0)
+            }
+
+            glow.layer.masksToBounds = true
+            glow.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+            glow.center = center
+            glow.backgroundColor = UIColor(red: r, green: g, blue: b, alpha: fillAlpha)
+        }
 
         let sig = "\(flutterAnnotation.glowColorArgb)-\(flutterAnnotation.glowIntensity)"
         if sig != lastGlowSignature {
             lastGlowSignature = sig
-            glow.layer.removeAllAnimations()
             let peakOpacity = Float(a * intensity)
-            let maxScale = 1.0 + 0.95 * intensity
-            let pulseDuration = (1.1 + (1.0 - Double(intensity)) * 0.9) 
-            let cornerEnd = side / 2
-            Self.addRepeatingGlowPulse(
-                to: glow.layer,
-                maxScale: maxScale,
-                peakOpacity: peakOpacity,
-                pulseDuration: pulseDuration,
-                cornerRadiusFrom: Self.glowCornerRadiusStart,
-                cornerRadiusTo: cornerEnd
-            )
+            let pulseDuration = Self.glowPulseDuration + (1.0 - Double(intensity)) * 0.6
+            let baseTime = CACurrentMediaTime()
+
+            for index in 0..<Self.glowPulseCount {
+                guard let glow = viewWithTag(Self.glowPulseTagBase + index) else { continue }
+                glow.layer.removeAllAnimations()
+                Self.addRepeatingGlowPulse(
+                    to: glow.layer,
+                    peakOpacity: peakOpacity,
+                    pulseDuration: pulseDuration,
+                    staggerDelay: Double(index) * Self.glowPulseStagger,
+                    baseTime: baseTime
+                )
+            }
         }
     }
 
-    /// One full outward pulse per cycle (ease-out), repeated forever; does not restart on layout unless color/intensity change.
+    /// Maps visual size / border-radius pairs to layer `scale` and `cornerRadius` keyframes.
+    private static func glowPulseKeyframeAnimation(
+        keyPath: String,
+        values: [CGFloat],
+        keyTimes: [NSNumber],
+        pulseDuration: CFTimeInterval,
+        staggerDelay: CFTimeInterval,
+        baseTime: CFTimeInterval
+    ) -> CAKeyframeAnimation {
+        let animation = CAKeyframeAnimation(keyPath: keyPath)
+        animation.values = values
+        animation.keyTimes = keyTimes
+        animation.duration = pulseDuration
+        animation.autoreverses = false
+        animation.repeatCount = .infinity
+        animation.isRemovedOnCompletion = false
+        animation.beginTime = baseTime + staggerDelay
+        if values.count > 1 {
+            animation.timingFunctions = Array(
+                repeating: CAMediaTimingFunction(name: .linear),
+                count: values.count - 1
+            )
+        }
+        return animation
+    }
+
+    private static func glowPulseLayerKeyframes() -> (
+        scales: [CGFloat],
+        layerCornerRadii: [CGFloat],
+        keyTimes: [NSNumber],
+        startLayerCornerRadius: CGFloat
+    ) {
+        let startSize = glowPulseKeyframes.first!.size
+        let endSize = glowPulseKeyframes.last!.size
+        let sizeRange = endSize - startSize
+
+        var scales: [CGFloat] = []
+        var layerCornerRadii: [CGFloat] = []
+        var keyTimes: [NSNumber] = []
+
+        for keyframe in glowPulseKeyframes {
+            let scale = keyframe.size / glowSide
+            let layerCorner = keyframe.borderRadius / scale
+            scales.append(scale)
+            layerCornerRadii.append(layerCorner)
+            let time = sizeRange > 0 ? (keyframe.size - startSize) / sizeRange : 0
+            keyTimes.append(NSNumber(value: Double(time)))
+        }
+
+        return (scales, layerCornerRadii, keyTimes, layerCornerRadii.first ?? 0)
+    }
+
+    /// One full outward pulse per cycle, repeated forever; does not restart on layout unless color/intensity change.
     private static func addRepeatingGlowPulse(
         to layer: CALayer,
-        maxScale: CGFloat,
         peakOpacity: Float,
         pulseDuration: CFTimeInterval,
-        cornerRadiusFrom: CGFloat,
-        cornerRadiusTo: CGFloat
+        staggerDelay: CFTimeInterval,
+        baseTime: CFTimeInterval
     ) {
         guard peakOpacity > 0 else { return }
 
-        let scale = CABasicAnimation(keyPath: "transform.scale")
-        scale.fromValue = 1.0
-        scale.toValue = maxScale
-        scale.duration = pulseDuration
-        scale.autoreverses = false
-        scale.repeatCount = .infinity
-        scale.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        scale.isRemovedOnCompletion = false
+        let keyframes = glowPulseLayerKeyframes()
+
+        let scale = glowPulseKeyframeAnimation(
+            keyPath: "transform.scale",
+            values: keyframes.scales,
+            keyTimes: keyframes.keyTimes,
+            pulseDuration: pulseDuration,
+            staggerDelay: staggerDelay,
+            baseTime: baseTime
+        )
 
         let opacity = CABasicAnimation(keyPath: "opacity")
         opacity.fromValue = peakOpacity
@@ -135,21 +212,22 @@ class GlowFlutterAnnotationView: FlutterAnnotationView {
         opacity.repeatCount = .infinity
         opacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
         opacity.isRemovedOnCompletion = false
+        opacity.beginTime = baseTime + staggerDelay
 
-        let corner = CABasicAnimation(keyPath: "cornerRadius")
-        corner.fromValue = cornerRadiusFrom
-        corner.toValue = cornerRadiusTo
-        corner.duration = pulseDuration
-        corner.autoreverses = false
-        corner.repeatCount = .infinity
-        corner.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        corner.isRemovedOnCompletion = false
+        let corner = glowPulseKeyframeAnimation(
+            keyPath: "cornerRadius",
+            values: keyframes.layerCornerRadii,
+            keyTimes: keyframes.keyTimes,
+            pulseDuration: pulseDuration,
+            staggerDelay: staggerDelay,
+            baseTime: baseTime
+        )
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.transform = CATransform3DIdentity
-        layer.opacity = peakOpacity
-        layer.cornerRadius = cornerRadiusFrom
+        layer.opacity = 0
+        layer.cornerRadius = keyframes.startLayerCornerRadius
         CATransaction.commit()
 
         layer.add(scale, forKey: "glowScaleLoop")
