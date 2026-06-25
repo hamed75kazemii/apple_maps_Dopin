@@ -73,6 +73,10 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     'https://i.pravatar.cc/150?img=3',
   ];
   static const Color _labelColor = Color(0xFF7B2CBF);
+  static const List<Color> _labelGradientColors = <Color>[
+    Color(0xFFEC30E4),
+    Color(0xFF581DFF),
+  ];
   static const MarkerShadow _demoShadow = MarkerShadow();
 
   static const DopinMarker _singleImageMarker = DopinMarker(
@@ -85,7 +89,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     borderColor: Colors.white,
     borderRadius: 12,
     labelColor: _labelColor,
-    label: 'Me'
+    labelGradientColors: _labelGradientColors,
+    label: 'Me',
   );
 
   static const DopinMarker _dualImageMarker = DopinMarker(

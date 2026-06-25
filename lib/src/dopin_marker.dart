@@ -27,6 +27,7 @@ class DopinMarker {
     this.labelFontSize = 10,
     this.badgeHeight = 18,
     this.labelColor = const Color(0xFF7B2CBF),
+    this.labelGradientColors,
   });
 
   factory DopinMarker.withPng({
@@ -41,6 +42,7 @@ class DopinMarker {
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
+    List<Color>? labelGradientColors,
   }) {
     return DopinMarker(
       imagePng: imagePng,
@@ -54,6 +56,7 @@ class DopinMarker {
       labelFontSize: labelFontSize,
       badgeHeight: badgeHeight,
       labelColor: labelColor,
+      labelGradientColors: labelGradientColors,
     );
   }
 
@@ -73,6 +76,7 @@ class DopinMarker {
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
+    List<Color>? labelGradientColors,
   }) async {
     List<dynamic> assetJson;
     if (!mipmaps && configuration.devicePixelRatio != null) {
@@ -98,6 +102,7 @@ class DopinMarker {
       labelFontSize: labelFontSize,
       badgeHeight: badgeHeight,
       labelColor: labelColor,
+      labelGradientColors: labelGradientColors,
     );
   }
 
@@ -125,6 +130,9 @@ class DopinMarker {
   final double badgeHeight;
   final Color labelColor;
 
+  /// When set (2+ colors), native iOS draws the badge label with a horizontal gradient.
+  final List<Color>? labelGradientColors;
+
   Map<String, dynamic> _toJson() {
     final Map<String, dynamic> json = <String, dynamic>{
       'width': width,
@@ -147,6 +155,10 @@ class DopinMarker {
     if (count != null && count! > 0) {
       json['count'] = count;
     }
+    if (labelGradientColors != null && labelGradientColors!.length >= 2) {
+      json['labelGradientColors'] =
+          labelGradientColors!.map((Color c) => c.value).toList();
+    }
     return json;
   }
 
@@ -167,7 +179,8 @@ class DopinMarker {
         borderRadius == o.borderRadius &&
         labelFontSize == o.labelFontSize &&
         badgeHeight == o.badgeHeight &&
-        labelColor == o.labelColor;
+        labelColor == o.labelColor &&
+        _listEqual(labelGradientColors, o.labelGradientColors);
   }
 
   @override
@@ -185,6 +198,9 @@ class DopinMarker {
         labelFontSize,
         badgeHeight,
         labelColor,
+        labelGradientColors == null
+            ? null
+            : Object.hashAll(labelGradientColors!),
       );
 
   static bool _bytesEqual(Uint8List? a, Uint8List? b) {

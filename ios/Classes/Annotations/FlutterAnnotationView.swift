@@ -545,11 +545,14 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
             badge.backgroundColor = .white
             badge.layer.cornerRadius = badgeH / 2
             badge.clipsToBounds = true
-            let badgeLabel = UILabel(frame: badge.bounds.insetBy(dx: 4, dy: 2))
-            badgeLabel.text = labelText
-            badgeLabel.font = .systemFont(ofSize: annotation.dopinLabelFontSize, weight: .semibold)
-            badgeLabel.textAlignment = .center
-            badgeLabel.textColor = annotation.dopinLabelColor
+            let labelFrame = badge.bounds.insetBy(dx: 4, dy: 2)
+            let badgeLabel = makeBadgeLabel(
+                text: labelText,
+                frame: labelFrame,
+                fontSize: annotation.dopinLabelFontSize,
+                textColor: annotation.dopinLabelColor,
+                gradientColors: annotation.dopinLabelGradientColors
+            )
             badge.addSubview(badgeLabel)
             container.addSubview(badge)
         }
@@ -559,6 +562,63 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         }
 
         container.bounds = CGRect(origin: .zero, size: CGSize(width: totalW, height: totalH))
+        return container
+    }
+
+    private static func makeBadgeLabel(
+        text: String,
+        frame: CGRect,
+        fontSize: CGFloat,
+        textColor: UIColor,
+        gradientColors: [UIColor]?
+    ) -> UIView {
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        if let colors = gradientColors, colors.count >= 2 {
+            return makeGradientTextLabel(text: text, frame: frame, font: font, colors: colors)
+        }
+
+        let label = UILabel(frame: frame)
+        label.text = text
+        label.font = font
+        label.textAlignment = .center
+        label.textColor = textColor
+        return label
+    }
+
+    private static func makeGradientTextLabel(
+        text: String,
+        frame: CGRect,
+        font: UIFont,
+        colors: [UIColor]
+    ) -> UIView {
+        let maskLabel = UILabel(frame: frame)
+        maskLabel.text = text
+        maskLabel.font = font
+        maskLabel.textAlignment = .center
+        maskLabel.textColor = .black
+        maskLabel.backgroundColor = .clear
+
+        let renderer = UIGraphicsImageRenderer(size: frame.size)
+        let maskImage = renderer.image { context in
+            maskLabel.layer.render(in: context.cgContext)
+        }
+
+        let container = UIView(frame: frame)
+        container.backgroundColor = .clear
+        container.isUserInteractionEnabled = false
+
+        let gradientLayer = CAGradientLayer()
+        gradientLayer.frame = container.bounds
+        gradientLayer.colors = colors.map { $0.cgColor }
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+
+        let maskLayer = CALayer()
+        maskLayer.frame = gradientLayer.bounds
+        maskLayer.contents = maskImage.cgImage
+        gradientLayer.mask = maskLayer
+
+        container.layer.addSublayer(gradientLayer)
         return container
     }
 

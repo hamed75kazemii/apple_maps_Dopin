@@ -383,6 +383,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.dopinLabelFontSize = annotation.dopinLabelFontSize
                 oldAnnotation.dopinBadgeHeight = annotation.dopinBadgeHeight
                 oldAnnotation.dopinLabelColor = annotation.dopinLabelColor
+                oldAnnotation.dopinLabelGradientColors = annotation.dopinLabelGradientColors
                 oldAnnotation.usesSvgMarker = annotation.usesSvgMarker
                 oldAnnotation.svgWidth = annotation.svgWidth
                 oldAnnotation.svgHeight = annotation.svgHeight
