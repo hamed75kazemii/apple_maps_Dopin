@@ -37,13 +37,49 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     private var orbitPitchPeriod: Double = 0
     private var orbitElapsed: CFTimeInterval = 0
 
+    // Frame-driven camera transition for custom animation durations. MapKit ignores
+    // CATransaction.setAnimationDuration for setCamera/setRegion, so we interpolate
+    // each frame via setOrbitCamera (same path as the native orbit sweep).
+    private var cameraAnimationDisplayLink: CADisplayLink?
+    private var cameraAnimationStartTime: CFTimeInterval = 0
+    private var cameraAnimationDuration: TimeInterval = 0
+    private var cameraAnimationFrom: CameraTargetState = CameraTargetState(
+        center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        zoom: 0,
+        pitch: 0,
+        heading: 0
+    )
+    private var cameraAnimationTo: CameraTargetState = CameraTargetState(
+        center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        zoom: 0,
+        pitch: 0,
+        heading: 0
+    )
+
     var isOrbiting: Bool {
         return orbitDisplayLink != nil
+    }
+
+    var isCameraAnimating: Bool {
+        return cameraAnimationDisplayLink != nil
+    }
+
+    private var isDrivingCamera: Bool {
+        return isOrbiting || isCameraAnimating
+    }
+
+    private struct CameraTargetState {
+        let center: CLLocationCoordinate2D
+        let zoom: Double
+        let pitch: CGFloat
+        let heading: CLLocationDirection
     }
 
     deinit {
         orbitDisplayLink?.invalidate()
         orbitDisplayLink = nil
+        cameraAnimationDisplayLink?.invalidate()
+        cameraAnimationDisplayLink = nil
     }
     
     public init(withFrame frame: CGRect, withRegistrar registrar: FlutterPluginRegistrar, withargs args: Dictionary<String, Any> ,withId id: Int64) {
@@ -256,14 +292,230 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     
     private func animateCamera(args: Dictionary<String, Any>) -> Void {
         let duration = Self.animationDuration(from: args["duration"])
-        let positionData: Dictionary<String, Any> = self.toPositionData(data: args["cameraUpdate"] as! Array<Any>, animated: true, duration: duration)
-        if !positionData.isEmpty {
-            guard let _ = positionData["moveToBounds"] else {
-                self.mapView.setCenterCoordinate(positionData, animated: true, duration: duration)
+        let cameraUpdate = args["cameraUpdate"] as! Array<Any>
+
+        if let duration = duration, duration > 0 {
+            if let boundsData = self.boundsPositionData(from: cameraUpdate) {
+                self.mapView.setBounds(boundsData, animated: true)
                 return
             }
-            self.mapView.setBounds(positionData, animated: true, duration: duration)
+            if let target = self.resolveCameraTarget(from: cameraUpdate) {
+                self.startCameraTransition(to: target, duration: duration)
+                return
+            }
         }
+
+        let positionData: Dictionary<String, Any> = self.toPositionData(data: cameraUpdate, animated: true)
+        if !positionData.isEmpty {
+            guard let _ = positionData["moveToBounds"] else {
+                self.mapView.setCenterCoordinate(positionData, animated: true)
+                return
+            }
+            self.mapView.setBounds(positionData, animated: true)
+        }
+    }
+
+    private func boundsPositionData(from data: Array<Any>) -> Dictionary<String, Any>? {
+        guard let update = data[0] as? String, update == "newLatLngBounds" else { return nil }
+        guard let targetData = data[1] as? Array<Any> else { return nil }
+        let padding: Double = data[2] as? Double ?? 0
+        return ["target": targetData, "padding": padding, "moveToBounds": true]
+    }
+
+    private func resolveCameraTarget(from data: Array<Any>) -> CameraTargetState? {
+        guard let update = data[0] as? String else { return nil }
+        let currentCenter = self.mapView.camera.centerCoordinate
+        let currentZoom = self.mapView.calculatedZoomLevel
+        let currentPitch = CGFloat(self.mapView.camera.pitch)
+        let currentHeading = self.mapView.actualHeading
+
+        switch update {
+        case "newCameraPosition":
+            guard let positionData = data[1] as? Dictionary<String, Any> else { return nil }
+            return self.cameraTargetState(from: positionData)
+        case "newLatLng":
+            guard let target = data[1] as? Array<CLLocationDegrees>, target.count >= 2 else { return nil }
+            return CameraTargetState(
+                center: CLLocationCoordinate2D(latitude: target[0], longitude: target[1]),
+                zoom: currentZoom,
+                pitch: currentPitch,
+                heading: currentHeading
+            )
+        case "newLatLngZoom":
+            guard let target = data[1] as? Array<CLLocationDegrees>, target.count >= 2 else { return nil }
+            let zoom = data[2] as? Double ?? currentZoom
+            return CameraTargetState(
+                center: CLLocationCoordinate2D(latitude: target[0], longitude: target[1]),
+                zoom: zoom,
+                pitch: currentPitch,
+                heading: currentHeading
+            )
+        case "zoomTo":
+            guard let zoomTo = data[1] as? Double else { return nil }
+            return CameraTargetState(
+                center: currentCenter,
+                zoom: self.clampedZoom(zoomTo),
+                pitch: currentPitch,
+                heading: currentHeading
+            )
+        case "zoomBy":
+            guard let zoomBy = data[1] as? Double else { return nil }
+            return CameraTargetState(
+                center: currentCenter,
+                zoom: self.clampedZoom(currentZoom + zoomBy),
+                pitch: currentPitch,
+                heading: currentHeading
+            )
+        case "zoomIn":
+            var zoom = currentZoom
+            if zoom < 2 { zoom = 2 }
+            zoom += 1
+            return CameraTargetState(
+                center: currentCenter,
+                zoom: self.clampedZoom(zoom),
+                pitch: currentPitch,
+                heading: currentHeading
+            )
+        case "zoomOut":
+            var zoom = currentZoom - 1
+            if round(zoom) <= 2 { zoom = 0 }
+            return CameraTargetState(
+                center: currentCenter,
+                zoom: self.clampedZoom(zoom),
+                pitch: currentPitch,
+                heading: currentHeading
+            )
+        default:
+            return nil
+        }
+    }
+
+    private func clampedZoom(_ zoom: Double) -> Double {
+        return min(self.mapView.maxZoomLevel, max(self.mapView.minZoomLevel, zoom))
+    }
+
+    private func cameraTargetState(from positionData: Dictionary<String, Any>) -> CameraTargetState? {
+        guard let targetList = positionData["target"] as? Array<CLLocationDegrees>, targetList.count >= 2 else {
+            return nil
+        }
+        let center = CLLocationCoordinate2D(latitude: targetList[0], longitude: targetList[1])
+        let zoom = positionData["zoom"] as? Double ?? self.mapView.calculatedZoomLevel
+        let pitch: CGFloat
+        if let value = positionData["pitch"] as? CGFloat {
+            pitch = value
+        } else if let value = positionData["pitch"] as? Double {
+            pitch = CGFloat(value)
+        } else {
+            pitch = CGFloat(self.mapView.camera.pitch)
+        }
+        let heading: CLLocationDirection
+        if let value = positionData["heading"] as? CLLocationDirection {
+            heading = value
+        } else if let value = positionData["heading"] as? Double {
+            heading = CLLocationDirection(value)
+        } else {
+            heading = self.mapView.actualHeading
+        }
+        return CameraTargetState(center: center, zoom: zoom, pitch: pitch, heading: heading)
+    }
+
+    private func currentCameraTargetState() -> CameraTargetState {
+        return CameraTargetState(
+            center: self.mapView.camera.centerCoordinate,
+            zoom: self.mapView.calculatedZoomLevel,
+            pitch: CGFloat(self.mapView.camera.pitch),
+            heading: self.mapView.actualHeading
+        )
+    }
+
+    private func startCameraTransition(to target: CameraTargetState, duration: TimeInterval) -> Void {
+        self.invalidateOrbitDisplayLink()
+        self.invalidateCameraAnimation()
+
+        self.cameraAnimationFrom = self.currentCameraTargetState()
+        self.cameraAnimationTo = target
+        self.cameraAnimationDuration = duration
+        self.cameraAnimationStartTime = 0
+
+        self.applyCameraTransitionFrame(progress: 0)
+        self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
+
+        let link = CADisplayLink(target: self, selector: #selector(self.onCameraAnimationTick(_:)))
+        link.add(to: .main, forMode: .common)
+        self.cameraAnimationDisplayLink = link
+    }
+
+    @objc private func onCameraAnimationTick(_ link: CADisplayLink) -> Void {
+        if self.cameraAnimationStartTime == 0 {
+            self.cameraAnimationStartTime = link.timestamp
+            return
+        }
+
+        let elapsed = link.timestamp - self.cameraAnimationStartTime
+        let rawProgress = min(1.0, elapsed / self.cameraAnimationDuration)
+        let progress = self.easeInOutCubic(rawProgress)
+        self.applyCameraTransitionFrame(progress: progress)
+
+        if rawProgress >= 1.0 {
+            self.finishCameraTransition()
+        }
+    }
+
+    private func applyCameraTransitionFrame(progress: Double) -> Void {
+        let from = self.cameraAnimationFrom
+        let to = self.cameraAnimationTo
+        let t = progress
+
+        let center = CLLocationCoordinate2D(
+            latitude: self.lerp(from.center.latitude, to.center.latitude, t),
+            longitude: self.lerp(from.center.longitude, to.center.longitude, t)
+        )
+        let zoom = self.lerp(from.zoom, to.zoom, t)
+        let pitch = CGFloat(self.lerp(Double(from.pitch), Double(to.pitch), t))
+        let heading = self.lerpBearing(from: from.heading, to: to.heading, t: t)
+
+        self.mapView.setOrbitCamera(
+            center: center,
+            zoomLevel: zoom,
+            pitch: pitch,
+            heading: heading,
+            verticalScreenOffset: 0
+        )
+    }
+
+    private func finishCameraTransition() -> Void {
+        self.applyCameraTransitionFrame(progress: 1)
+        self.invalidateCameraAnimation()
+
+        let center = self.mapView.region.center
+        self.channel.invokeMethod("camera#onMove", arguments: ["position": [
+            "heading": self.mapView.actualHeading,
+            "target": [center.latitude, center.longitude],
+            "pitch": self.mapView.camera.pitch,
+            "zoom": self.mapView.calculatedZoomLevel
+        ]])
+        self.channel.invokeMethod("camera#onIdle", arguments: "")
+    }
+
+    private func invalidateCameraAnimation() -> Void {
+        self.cameraAnimationDisplayLink?.invalidate()
+        self.cameraAnimationDisplayLink = nil
+        self.cameraAnimationStartTime = 0
+    }
+
+    private func lerp(_ from: Double, _ to: Double, _ t: Double) -> Double {
+        return from + (to - from) * t
+    }
+
+    private func lerpBearing(from: Double, to: Double, t: Double) -> CLLocationDirection {
+        var delta = (to - from).truncatingRemainder(dividingBy: 360)
+        if delta > 180 { delta -= 360 }
+        if delta < -180 { delta += 360 }
+        return CLLocationDirection((from + delta * t + 360).truncatingRemainder(dividingBy: 360))
+    }
+
+    private func easeInOutCubic(_ t: Double) -> Double {
+        return t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
     }
 
     private static func animationDuration(from value: Any?) -> TimeInterval? {
@@ -283,6 +535,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 
     private func startOrbit(args: Dictionary<String, Any>) -> Void {
         guard let centerList = args["center"] as? Array<Double>, centerList.count == 2 else { return }
+        self.invalidateCameraAnimation()
         self.invalidateOrbitDisplayLink()
 
         self.orbitCenter = CLLocationCoordinate2D(latitude: centerList[0], longitude: centerList[1])
@@ -402,7 +655,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         result(["point": [point.x, point.y]])
     }
     
-    private func toPositionData(data: Array<Any>, animated: Bool, duration: TimeInterval? = nil) -> Dictionary<String, Any> {
+    private func toPositionData(data: Array<Any>, animated: Bool) -> Dictionary<String, Any> {
         var positionData: Dictionary<String, Any> = [:]
         if let update: String = data[0] as? String {
             switch(update) {
@@ -426,16 +679,16 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                 }
             case "zoomBy":
                 if let zoomBy: Double = data[1] as? Double {
-                    mapView.zoomBy(zoomBy: zoomBy, animated: animated, duration: duration)
+                    mapView.zoomBy(zoomBy: zoomBy, animated: animated)
                 }
             case "zoomTo":
                 if let zoomTo: Double = data[1] as? Double {
-                    mapView.zoomTo(newZoomLevel: zoomTo, animated: animated, duration: duration)
+                    mapView.zoomTo(newZoomLevel: zoomTo, animated: animated)
                 }
             case "zoomIn":
-                mapView.zoomIn(animated: animated, duration: duration)
+                mapView.zoomIn(animated: animated)
             case "zoomOut":
-                mapView.zoomOut(animated: animated, duration: duration)
+                mapView.zoomOut(animated: animated)
             default:
                 positionData = [:]
             }
@@ -453,7 +706,7 @@ extension AppleMapController: MKMapViewDelegate {
         // camera#onMove/onIdle here would flood the Flutter channel and defeat the
         // whole point of moving the orbit off the Dart timer. stopOrbit() sends a
         // single final position instead.
-        if self.isOrbiting {
+        if self.isDrivingCamera {
             self.mapView.updateGlobeTransitionIfNeeded()
             return
         }
@@ -467,7 +720,7 @@ extension AppleMapController: MKMapViewDelegate {
     
     // onMoveStarted
     public func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
-        if self.isOrbiting { return }
+        if self.isDrivingCamera { return }
         self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
     }
     

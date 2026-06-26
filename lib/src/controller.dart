@@ -157,8 +157,9 @@ class AppleMapController {
 
   /// Starts an animated change of the map camera position.
   ///
-  /// When [duration] is provided, the platform animates over that interval;
-  /// otherwise the system default animation timing is used.
+  /// When [duration] is provided, the platform drives a frame-by-frame camera
+  /// transition over that interval; otherwise the system default animation
+  /// timing is used.
   ///
   /// The returned [Future] completes after the change has been started on the
   /// platform side.
