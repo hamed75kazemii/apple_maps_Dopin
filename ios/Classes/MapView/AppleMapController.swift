@@ -255,14 +255,28 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     }
     
     private func animateCamera(args: Dictionary<String, Any>) -> Void {
-        let positionData: Dictionary<String, Any> = self.toPositionData(data: args["cameraUpdate"] as! Array<Any>, animated: true)
+        let duration = Self.animationDuration(from: args["duration"])
+        let positionData: Dictionary<String, Any> = self.toPositionData(data: args["cameraUpdate"] as! Array<Any>, animated: true, duration: duration)
         if !positionData.isEmpty {
             guard let _ = positionData["moveToBounds"] else {
-                self.mapView.setCenterCoordinate(positionData, animated: true)
+                self.mapView.setCenterCoordinate(positionData, animated: true, duration: duration)
                 return
             }
-            self.mapView.setBounds(positionData, animated: true)
+            self.mapView.setBounds(positionData, animated: true, duration: duration)
         }
+    }
+
+    private static func animationDuration(from value: Any?) -> TimeInterval? {
+        let milliseconds: Double?
+        if let ms = value as? Double {
+            milliseconds = ms
+        } else if let ms = value as? Int {
+            milliseconds = Double(ms)
+        } else {
+            milliseconds = nil
+        }
+        guard let ms = milliseconds, ms > 0 else { return nil }
+        return TimeInterval(ms / 1000.0)
     }
     
     // MARK: - Native camera orbit
@@ -388,7 +402,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         result(["point": [point.x, point.y]])
     }
     
-    private func toPositionData(data: Array<Any>, animated: Bool) -> Dictionary<String, Any> {
+    private func toPositionData(data: Array<Any>, animated: Bool, duration: TimeInterval? = nil) -> Dictionary<String, Any> {
         var positionData: Dictionary<String, Any> = [:]
         if let update: String = data[0] as? String {
             switch(update) {
@@ -412,16 +426,16 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                 }
             case "zoomBy":
                 if let zoomBy: Double = data[1] as? Double {
-                    mapView.zoomBy(zoomBy: zoomBy, animated: animated)
+                    mapView.zoomBy(zoomBy: zoomBy, animated: animated, duration: duration)
                 }
             case "zoomTo":
                 if let zoomTo: Double = data[1] as? Double {
-                    mapView.zoomTo(newZoomLevel: zoomTo, animated: animated)
+                    mapView.zoomTo(newZoomLevel: zoomTo, animated: animated, duration: duration)
                 }
             case "zoomIn":
-                mapView.zoomIn(animated: animated)
+                mapView.zoomIn(animated: animated, duration: duration)
             case "zoomOut":
-                mapView.zoomOut(animated: animated)
+                mapView.zoomOut(animated: animated, duration: duration)
             default:
                 positionData = [:]
             }

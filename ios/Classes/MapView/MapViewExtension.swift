@@ -18,6 +18,22 @@ public extension MKMapView {
         static var _maxZoomLevel: Double = Double(21)
         static var _minZoomLevel: Double = Double(2)
     }
+
+    /// Runs a MapKit animation, optionally overriding the system duration.
+    func runMapAnimation(animated: Bool, duration: TimeInterval? = nil, _ animations: () -> Void) {
+        guard animated else {
+            animations()
+            return
+        }
+        if let duration = duration, duration > 0 {
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(duration)
+            animations()
+            CATransaction.commit()
+        } else {
+            animations()
+        }
+    }
     
     var maxZoomLevel: Double {
         set(_maxZoomLevel) {
@@ -84,7 +100,7 @@ public extension MKMapView {
         }
     }
     
-    func setCenterCoordinate(_ positionData: Dictionary<String, Any>, animated: Bool) {
+    func setCenterCoordinate(_ positionData: Dictionary<String, Any>, animated: Bool, duration: TimeInterval? = nil) {
         let targetList :Array<CLLocationDegrees> = positionData["target"] as? Array<CLLocationDegrees> ?? [self.camera.centerCoordinate.latitude, self.camera.centerCoordinate.longitude]
         let zoom :Double = positionData["zoom"] as? Double ?? Holder._zoomLevel
         Holder._zoomLevel = zoom
@@ -96,23 +112,26 @@ public extension MKMapView {
         }
         let centerCoordinate :CLLocationCoordinate2D = CLLocationCoordinate2D(latitude:  targetList[0], longitude: targetList[1])
         if #available(iOS 9.0, *) {
-            self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: zoom, animated: animated)
+            self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: zoom, animated: animated, duration: duration)
         } else {
-            self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: zoom, animated: animated)
+            self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: zoom, animated: animated, duration: duration)
         }
     }
     
-    func setBounds(_ positionData: Dictionary<String, Any>, animated: Bool) {
+    func setBounds(_ positionData: Dictionary<String, Any>, animated: Bool, duration: TimeInterval? = nil) {
         guard let targetList :Array<Array<CLLocationDegrees>> = positionData["target"] as? Array<Array<CLLocationDegrees>> else { return }
         let padding :Double = positionData["padding"] as? Double ?? 0
         let coodinates: Array<CLLocationCoordinate2D> = targetList.map { (coordinate : Array<CLLocationDegrees>) in
             return CLLocationCoordinate2D(latitude:  coordinate[0], longitude: coordinate[1])
         }
         guard let mapRect = coodinates.mapRect() else { return }
-        self.setVisibleMapRect(mapRect, edgePadding: UIEdgeInsets(top: CGFloat(padding), left: CGFloat(padding), bottom: CGFloat(padding), right: CGFloat(padding)), animated: animated)
+        let edgePadding = UIEdgeInsets(top: CGFloat(padding), left: CGFloat(padding), bottom: CGFloat(padding), right: CGFloat(padding))
+        runMapAnimation(animated: animated, duration: duration) {
+            self.setVisibleMapRect(mapRect, edgePadding: edgePadding, animated: animated)
+        }
     }
     
-    func setCenterCoordinateRegion(centerCoordinate: CLLocationCoordinate2D, zoomLevel: Double, animated: Bool) {
+    func setCenterCoordinateRegion(centerCoordinate: CLLocationCoordinate2D, zoomLevel: Double, animated: Bool, duration: TimeInterval? = nil) {
         // clamp large numbers to 28
         let zoomL = min(zoomLevel, 28);
     
@@ -121,7 +140,9 @@ public extension MKMapView {
         let region = MKCoordinateRegion.init(center: centerCoordinate, span: span)
         
         // set the region like normal
-        self.setRegion(region, animated: animated)
+        runMapAnimation(animated: animated, duration: duration) {
+            self.setRegion(region, animated: animated)
+        }
         
         // Setting the pitch/heading doesn't work while animating yet.
         // The animation will stop if the you change camera properties while it's running.
@@ -164,7 +185,7 @@ public extension MKMapView {
     }
     
     @available(iOS 9.0, *)
-    func setCenterCoordinateWithAltitude(centerCoordinate: CLLocationCoordinate2D, zoomLevel: Double, animated: Bool) {
+    func setCenterCoordinateWithAltitude(centerCoordinate: CLLocationCoordinate2D, zoomLevel: Double, animated: Bool, duration: TimeInterval? = nil) {
         // clamp large numbers to 28
         let zoomL = min(zoomLevel, 28);
 
@@ -173,7 +194,9 @@ public extension MKMapView {
         if useGlobeRegion {
             let span = MKCoordinateSpan(latitudeDelta: 180, longitudeDelta: 360)
             let region = MKCoordinateRegion(center: centerCoordinate, span: span)
-            self.setRegion(region, animated: animated)
+            runMapAnimation(animated: animated, duration: duration) {
+                self.setRegion(region, animated: animated)
+            }
             if !animated {
                 self.camera.pitch = Holder._pitch
                 self.camera.heading = Holder._heading
@@ -182,7 +205,10 @@ public extension MKMapView {
         }
 
         let altitude = getCameraAltitude(centerCoordinate: centerCoordinate, zoomLevel: zoomL)
-        self.setCamera(MKMapCamera(lookingAtCenter: centerCoordinate, fromDistance: CLLocationDistance(altitude), pitch: Holder._pitch, heading: Holder._heading), animated: animated)
+        let camera = MKMapCamera(lookingAtCenter: centerCoordinate, fromDistance: CLLocationDistance(altitude), pitch: Holder._pitch, heading: Holder._heading)
+        runMapAnimation(animated: animated, duration: duration) {
+            self.setCamera(camera, animated: animated)
+        }
     }
     
     private func getCameraAltitude(centerCoordinate: CLLocationCoordinate2D, zoomLevel: Double) -> Double {
@@ -238,21 +264,21 @@ public extension MKMapView {
         return ["northeast": [0.0, 0.0], "southwest": [0.0, 0.0]]
     }
     
-    func zoomIn(animated: Bool) {
+    func zoomIn(animated: Bool, duration: TimeInterval? = nil) {
         if Holder._zoomLevel - 1 <= Holder._maxZoomLevel {
             if Holder._zoomLevel < 2 {
                 Holder._zoomLevel = 2
             }
             Holder._zoomLevel += 1
             if #available(iOS 9.0, *) {
-                self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+                self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
             } else {
-                self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+                self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
             }
         }
     }
     
-    func zoomOut(animated: Bool) {
+    func zoomOut(animated: Bool, duration: TimeInterval? = nil) {
         if Holder._zoomLevel - 1 >= Holder._minZoomLevel {
             Holder._zoomLevel -= 1
             if round(Holder._zoomLevel) <= 2 {
@@ -260,14 +286,14 @@ public extension MKMapView {
             }
 
             if #available(iOS 9.0, *) {
-               self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+               self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
             } else {
-               self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+               self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
             }
         }
     }
     
-    func zoomTo(newZoomLevel: Double, animated: Bool) {
+    func zoomTo(newZoomLevel: Double, animated: Bool, duration: TimeInterval? = nil) {
         if newZoomLevel < Holder._minZoomLevel {
             Holder._zoomLevel = Holder._minZoomLevel
         } else if newZoomLevel > Holder._maxZoomLevel {
@@ -277,13 +303,13 @@ public extension MKMapView {
         }
 
         if #available(iOS 9.0, *) {
-            self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+            self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
         } else {
-            self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+            self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
         }
     }
     
-    func zoomBy(zoomBy: Double, animated: Bool) {
+    func zoomBy(zoomBy: Double, animated: Bool, duration: TimeInterval? = nil) {
         if Holder._zoomLevel + zoomBy < Holder._minZoomLevel {
             Holder._zoomLevel = Holder._minZoomLevel
         } else if Holder._zoomLevel + zoomBy > Holder._maxZoomLevel {
@@ -293,9 +319,9 @@ public extension MKMapView {
         }
         
         if #available(iOS 9.0, *) {
-            self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+            self.setCenterCoordinateWithAltitude(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
         } else {
-            self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated)
+            self.setCenterCoordinateRegion(centerCoordinate: centerCoordinate, zoomLevel: Holder._zoomLevel, animated: animated, duration: duration)
         }
     }
     

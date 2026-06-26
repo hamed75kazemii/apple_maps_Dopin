@@ -157,11 +157,18 @@ class AppleMapController {
 
   /// Starts an animated change of the map camera position.
   ///
+  /// When [duration] is provided, the platform animates over that interval;
+  /// otherwise the system default animation timing is used.
+  ///
   /// The returned [Future] completes after the change has been started on the
   /// platform side.
-  Future<void> animateCamera(CameraUpdate cameraUpdate) async {
+  Future<void> animateCamera(
+    CameraUpdate cameraUpdate, {
+    Duration? duration,
+  }) async {
     await channel.invokeMethod<void>('camera#animate', <String, dynamic>{
       'cameraUpdate': cameraUpdate._toJson(),
+      if (duration != null) 'duration': duration.inMilliseconds,
     });
   }
 
