@@ -924,10 +924,10 @@ enum SvgMarkerImageLoader {
             let hue = hueSum[bestBucket] / CGFloat(bestCount)
             let saturation = satSum[bestBucket] / CGFloat(bestCount)
 
-            // Dominant hue shown vivid + bright.
+            // Dominant hue shown as a light, pastel chip (low saturation, full brightness).
             return UIColor(
                 hue: hue,
-                saturation: min(max(saturation, 0.55), 0.9),
+                saturation: min(max(saturation, 0.22), 0.4),
                 brightness: 1.0,
                 alpha: 1
             )
@@ -1095,7 +1095,7 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
             emojiLabel.text = emoji
             emojiLabel.textAlignment = .center
             emojiLabel.baselineAdjustment = .alignCenters
-            emojiLabel.font = .systemFont(ofSize: avatarFrame.width * 0.6)
+            emojiLabel.font = .systemFont(ofSize: avatarFrame.width * 0.46)
             emojiLabel.adjustsFontSizeToFitWidth = true
             emojiLabel.minimumScaleFactor = 0.3
             emojiLabel.isUserInteractionEnabled = false
