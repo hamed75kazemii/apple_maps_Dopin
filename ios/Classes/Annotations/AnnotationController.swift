@@ -389,6 +389,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.svgHeight = annotation.svgHeight
                 oldAnnotation.svgImageUrl = annotation.svgImageUrl
                 oldAnnotation.svgImagePngData = annotation.svgImagePngData
+                oldAnnotation.svgEmoji = annotation.svgEmoji
                 oldAnnotation.glow = annotation.glow
                 oldAnnotation.glowColorArgb = annotation.glowColorArgb
                 oldAnnotation.glowIntensity = annotation.glowIntensity

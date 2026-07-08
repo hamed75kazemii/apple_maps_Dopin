@@ -6,8 +6,10 @@ part of apple_maps_flutter;
 
 /// Native event pin marker (iOS).
 ///
-/// The pin shape is the bundled SVG; an optional [imageUrl] / [imagePng] is
-/// drawn as a circle in the center of the pin head. For pin-shaped icons, use
+/// The pin shape is the bundled SVG. The center of the pin head shows one of
+/// (priority order): an [emoji] string, [imagePng] bytes, or a remote
+/// [imageUrl]. When [emoji] is provided it is drawn centered on a circular
+/// placeholder tinted with the emoji's average color. For pin-shaped icons, use
 /// `anchor: Offset(0.5, 1.0)` on the parent [Annotation].
 @immutable
 class SvgMarker {
@@ -16,6 +18,7 @@ class SvgMarker {
     this.height = 50,
     this.imageUrl,
     this.imagePng,
+    this.emoji,
   });
 
   /// Logical width in points.
@@ -30,12 +33,17 @@ class SvgMarker {
   /// Center image bytes (local).
   final Uint8List? imagePng;
 
+  /// Center emoji (text). Takes precedence over [imageUrl] / [imagePng]. The
+  /// emoji is drawn on a circle filled with the emoji's average color.
+  final String? emoji;
+
   Map<String, dynamic> _toJson() {
     return <String, dynamic>{
       'width': width,
       'height': height,
       if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
       if (imagePng != null) 'imagePng': imagePng,
+      if (emoji != null && emoji!.isNotEmpty) 'emoji': emoji,
     };
   }
 
@@ -47,6 +55,7 @@ class SvgMarker {
     return width == o.width &&
         height == o.height &&
         imageUrl == o.imageUrl &&
+        emoji == o.emoji &&
         _bytesEqual(imagePng, o.imagePng);
   }
 
@@ -56,6 +65,7 @@ class SvgMarker {
         height,
         imageUrl,
         imagePng?.length,
+        emoji,
       );
 
   static bool _bytesEqual(Uint8List? a, Uint8List? b) {

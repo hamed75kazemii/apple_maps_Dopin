@@ -826,6 +826,114 @@ enum SvgMarkerImageLoader {
         return CGRect(x: centerX - side / 2, y: centerY - side / 2, width: side, height: side)
     }
 
+    /// Renders an emoji string centered on a transparent square of `side` points.
+    static func emojiImage(_ emoji: String, side: CGFloat) -> UIImage {
+        let fontSize = side * 0.62
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: fontSize)
+        ]
+        let text = emoji as NSString
+        let textSize = text.size(withAttributes: attrs)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = UIScreen.main.scale
+        format.opaque = false
+
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            let origin = CGPoint(
+                x: (side - textSize.width) / 2,
+                y: (side - textSize.height) / 2
+            )
+            text.draw(at: origin, withAttributes: attrs)
+        }
+    }
+
+    /// Dominant vivid color of `image`, rendered with boosted brightness.
+    ///
+    /// Groups pixels by hue (ignoring transparent, near-gray, very dark and very
+    /// bright pixels), picks the most frequent hue bucket, then returns it with a
+    /// high brightness / saturation so the placeholder circle reads as a light,
+    /// colorful chip rather than a muddy average.
+    static func dominantColor(of image: UIImage) -> UIColor {
+        let fallback = UIColor(white: 0.92, alpha: 1)
+        guard let cg = image.cgImage else { return fallback }
+
+        let side = 32
+        let bytesPerPixel = 4
+        let bytesPerRow = side * bytesPerPixel
+        let count = side * side * bytesPerPixel
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+            | CGBitmapInfo.byteOrder32Big.rawValue
+
+        let bucketCount = 18
+        var data = [UInt8](repeating: 0, count: count)
+
+        return data.withUnsafeMutableBytes { raw -> UIColor in
+            guard let base = raw.baseAddress,
+                  let context = CGContext(
+                    data: base,
+                    width: side,
+                    height: side,
+                    bitsPerComponent: 8,
+                    bytesPerRow: bytesPerRow,
+                    space: colorSpace,
+                    bitmapInfo: bitmapInfo
+                  ) else { return fallback }
+
+            context.clear(CGRect(x: 0, y: 0, width: side, height: side))
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: side, height: side))
+
+            let buffer = base.assumingMemoryBound(to: UInt8.self)
+            var counts = [Int](repeating: 0, count: bucketCount)
+            var hueSum = [CGFloat](repeating: 0, count: bucketCount)
+            var satSum = [CGFloat](repeating: 0, count: bucketCount)
+
+            for index in stride(from: 0, to: count, by: bytesPerPixel) {
+                let alpha = CGFloat(buffer[index + 3]) / 255.0
+                guard alpha > 0.4 else { continue }
+
+                // premultipliedLast → recover the true (unpremultiplied) color.
+                let r = min(CGFloat(buffer[index]) / 255.0 / alpha, 1)
+                let g = min(CGFloat(buffer[index + 1]) / 255.0 / alpha, 1)
+                let b = min(CGFloat(buffer[index + 2]) / 255.0 / alpha, 1)
+
+                var h: CGFloat = 0
+                var s: CGFloat = 0
+                var v: CGFloat = 0
+                UIColor(red: r, green: g, blue: b, alpha: 1).getHue(&h, saturation: &s, brightness: &v, alpha: nil)
+
+                // Ignore near-gray / near-black / near-white pixels.
+                guard s > 0.25, v > 0.2, v < 0.98 else { continue }
+
+                let bucket = min(Int(h * CGFloat(bucketCount)), bucketCount - 1)
+                counts[bucket] += 1
+                hueSum[bucket] += h
+                satSum[bucket] += s
+            }
+
+            var bestBucket = -1
+            var bestCount = 0
+            for bucket in 0..<bucketCount where counts[bucket] > bestCount {
+                bestCount = counts[bucket]
+                bestBucket = bucket
+            }
+
+            guard bestBucket >= 0, bestCount > 0 else { return fallback }
+
+            let hue = hueSum[bestBucket] / CGFloat(bestCount)
+            let saturation = satSum[bestBucket] / CGFloat(bestCount)
+
+            // Dominant hue shown vivid + bright.
+            return UIColor(
+                hue: hue,
+                saturation: min(max(saturation, 0.55), 0.9),
+                brightness: 1.0,
+                alpha: 1
+            )
+        }
+    }
+
     static func loadCenterImage(for annotation: FlutterAnnotation, completion: @escaping (UIImage?) -> Void) {
         if let data = annotation.svgImagePngData,
            let image = UIImage(data: data, scale: UIScreen.main.scale) {
@@ -911,6 +1019,14 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
 
         let width = annotation.svgWidth
         let height = annotation.svgHeight
+
+        // Emoji takes precedence and is drawn synchronously in buildSvgMarker.
+        if let emoji = annotation.svgEmoji, !emoji.isEmpty {
+            avatarView.isHidden = false
+            pinView.image = SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
+            return
+        }
+
         let hasImage = annotation.svgImagePngData != nil
             || (annotation.svgImageUrl?.isEmpty == false)
 
@@ -949,12 +1065,16 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
         container.clipsToBounds = false
 
+        let emoji = annotation.svgEmoji ?? ""
+        let hasEmoji = !emoji.isEmpty
+
         let pinView = UIImageView(frame: container.bounds)
         pinView.tag = pinTag
         pinView.contentMode = .scaleToFill
         let hasImage = annotation.svgImagePngData != nil
             || !(annotation.svgImageUrl ?? "").isEmpty
-        pinView.image = hasImage
+        let hasCenterContent = hasEmoji || hasImage
+        pinView.image = hasCenterContent
             ? SvgMarkerImageLoader.eventMarkerImage(width: width, height: height)
             : SvgMarkerImageLoader.eventFillMarkerImage(width: width, height: height)
         container.addSubview(pinView)
@@ -962,11 +1082,29 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         let avatarFrame = SvgMarkerImageLoader.centerAvatarFrame(width: width, height: height)
         let avatarView = UIImageView(frame: avatarFrame)
         avatarView.tag = avatarTag
-        avatarView.contentMode = .scaleAspectFill
-        avatarView.backgroundColor = UIColor(white: 0.92, alpha: 1)
         avatarView.layer.cornerRadius = avatarFrame.width / 2
         avatarView.clipsToBounds = true
-        avatarView.isHidden = !hasImage
+
+        if hasEmoji {
+            let emojiImage = SvgMarkerImageLoader.emojiImage(emoji, side: avatarFrame.width)
+            avatarView.image = nil
+            avatarView.backgroundColor = SvgMarkerImageLoader.dominantColor(of: emojiImage)
+            avatarView.isHidden = false
+
+            let emojiLabel = UILabel(frame: avatarView.bounds)
+            emojiLabel.text = emoji
+            emojiLabel.textAlignment = .center
+            emojiLabel.baselineAdjustment = .alignCenters
+            emojiLabel.font = .systemFont(ofSize: avatarFrame.width * 0.6)
+            emojiLabel.adjustsFontSizeToFitWidth = true
+            emojiLabel.minimumScaleFactor = 0.3
+            emojiLabel.isUserInteractionEnabled = false
+            avatarView.addSubview(emojiLabel)
+        } else {
+            avatarView.contentMode = .scaleAspectFill
+            avatarView.backgroundColor = UIColor(white: 0.92, alpha: 1)
+            avatarView.isHidden = !hasImage
+        }
         container.addSubview(avatarView)
 
         container.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))

@@ -213,6 +213,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       shadow: _demoShadow,
       svgMarker: const SvgMarker(
         //    imageUrl: 'https://i.prafggvatar.cc/150?img=8',
+        emoji: '🎉',
       ),
     ),
   };
