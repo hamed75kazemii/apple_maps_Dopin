@@ -1111,3 +1111,336 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         return container
     }
 }
+
+// MARK: - Card markers
+
+final class CardMarkerAnnotationView: GlowFlutterAnnotationView {
+
+    private static let contentTag = 8_443_001
+    private static let imageTag = 8_443_002
+    private static let subtitleIconTag = 8_443_003
+    private static let distanceIconTag = 8_443_004
+    private static let bgLayerName = "cardMarkerBackground"
+
+    // Layout constants (points).
+    private static let hPad: CGFloat = 14
+    private static let vPad: CGFloat = 11
+    private static let imageTextGap: CGFloat = 12
+    private static let textDistanceGap: CGFloat = 16
+    private static let subtitleGap: CGFloat = 3
+    private static let subtitleIconGap: CGFloat = 5
+    private static let distanceIconGap: CGFloat = 4
+    private static let tailWidth: CGFloat = 24
+    private static let tailHeight: CGFloat = 10
+    private static let minTextColumnWidth: CGFloat = 40
+
+    private var configuredSignature: String?
+    private var imageLoadToken: String?
+
+    override var annotation: MKAnnotation? {
+        didSet { applyAnnotationIfNeeded(force: true) }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        configuredSignature = nil
+        imageLoadToken = nil
+        viewWithTag(Self.contentTag)?.removeFromSuperview()
+        image = nil
+        bounds = .zero
+        frame = .zero
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        applyAnnotationIfNeeded(force: false)
+    }
+
+    func configureIfNeeded() {
+        applyAnnotationIfNeeded(force: true)
+    }
+
+    override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
+        let content = contentView ?? viewWithTag(Self.contentTag)
+        super.applyFlutterMarkerShadow(contentView: content)
+        // Ensure the drop shadow follows the card + tail silhouette rather than
+        // the (transparent) container bounds.
+        if let content = content,
+           let bgLayer = content.layer.sublayers?.first(where: { $0.name == Self.bgLayerName }) as? CAShapeLayer {
+            content.layer.shadowPath = bgLayer.path
+        }
+    }
+
+    private func applyAnnotationIfNeeded(force: Bool) {
+        guard let flutter = annotation as? FlutterAnnotation, flutter.usesCardMarker else { return }
+
+        let sig = flutter.cardMarkerSignature
+        if !force, sig == configuredSignature {
+            applyFlutterMarkerShadow()
+            return
+        }
+        configuredSignature = sig
+
+        viewWithTag(Self.contentTag)?.removeFromSuperview()
+        image = nil
+        backgroundColor = .clear
+        clipsToBounds = false
+
+        let content = Self.buildCardMarker(annotation: flutter)
+        content.tag = Self.contentTag
+        addSubview(content)
+
+        let size = content.bounds.size
+        bounds = CGRect(origin: .zero, size: size)
+        frame.size = size
+        content.frame = bounds
+
+        loadImages(into: content, annotation: flutter)
+        applyFlutterMarkerShadow(contentView: content)
+    }
+
+    private func loadImages(into content: UIView, annotation: FlutterAnnotation) {
+        let token = annotation.cardMarkerSignature
+        imageLoadToken = token
+
+        if let imageView = content.viewWithTag(Self.imageTag) as? UIImageView {
+            Self.loadImage(
+                pngData: annotation.cardImagePngData,
+                assetName: annotation.cardImageAssetName,
+                assetScale: annotation.cardImageAssetScale,
+                urlString: annotation.cardImageUrl,
+                useBlankFallback: true
+            ) { [weak self, weak imageView] image in
+                guard let self = self, let imageView = imageView, self.imageLoadToken == token else { return }
+                DopinMarkerImageLoader.applyProfileImage(image, to: imageView)
+            }
+        }
+
+        if let subtitleIcon = content.viewWithTag(Self.subtitleIconTag) as? UIImageView {
+            Self.loadImage(
+                pngData: annotation.cardSubtitleIconPngData,
+                assetName: nil,
+                assetScale: 1.0,
+                urlString: annotation.cardSubtitleIconUrl,
+                useBlankFallback: false
+            ) { [weak self, weak subtitleIcon] image in
+                guard let self = self, let subtitleIcon = subtitleIcon, self.imageLoadToken == token else { return }
+                subtitleIcon.image = image?.withRenderingMode(.alwaysTemplate)
+            }
+        }
+    }
+
+    private static func loadImage(
+        pngData: Data?,
+        assetName: String?,
+        assetScale: CGFloat,
+        urlString: String?,
+        useBlankFallback: Bool,
+        completion: @escaping (UIImage?) -> Void
+    ) {
+        if let data = pngData, let image = UIImage(data: data, scale: UIScreen.main.scale) {
+            completion(image)
+            return
+        }
+        if let name = assetName, let base = UIImage(named: name) {
+            if abs(assetScale - 1.0) < 0.001, let cg = base.cgImage {
+                completion(UIImage(cgImage: cg, scale: UIScreen.main.scale, orientation: base.imageOrientation))
+            } else if let cg = base.cgImage {
+                completion(UIImage(cgImage: cg, scale: assetScale, orientation: base.imageOrientation))
+            } else {
+                completion(base)
+            }
+            return
+        }
+        DopinMarkerImageLoader.load(urlString: urlString, useBlankFallback: useBlankFallback, completion: completion)
+    }
+
+    private static func textSize(_ text: String, font: UIFont) -> CGSize {
+        return (text as NSString).size(withAttributes: [.font: font])
+    }
+
+    private static func buildCardMarker(annotation: FlutterAnnotation) -> UIView {
+        let titleFont = UIFont.systemFont(ofSize: annotation.cardTitleFontSize, weight: .semibold)
+        let subtitleFont = UIFont.systemFont(ofSize: annotation.cardSubtitleFontSize, weight: .regular)
+        let distanceFont = UIFont.systemFont(ofSize: annotation.cardDistanceFontSize, weight: .regular)
+
+        let title = annotation.cardTitle ?? ""
+        let subtitle = annotation.cardSubtitle ?? ""
+        let distance = annotation.cardDistance ?? ""
+
+        let hasSubtitle = !subtitle.isEmpty
+        let hasDistance = !distance.isEmpty
+        let hasSubtitleIcon = annotation.cardSubtitleIconPngData != nil
+            || (annotation.cardSubtitleIconUrl?.isEmpty == false)
+        let showDistanceIcon = hasDistance && annotation.cardShowDistanceIcon
+
+        let imageSize = annotation.cardImageSize
+        let subtitleIconSide = annotation.cardSubtitleFontSize + 1
+        let distanceIconSide = annotation.cardDistanceFontSize + 1
+
+        // Measure text.
+        let titleWidth = ceil(textSize(title, font: titleFont).width)
+        let subtitleTextWidth = hasSubtitle ? ceil(textSize(subtitle, font: subtitleFont).width) : 0
+        let subtitleRowWidth = subtitleTextWidth
+            + (hasSubtitleIcon ? subtitleIconSide + subtitleIconGap : 0)
+        let distanceTextWidth = hasDistance ? ceil(textSize(distance, font: distanceFont).width) : 0
+        let distanceBlockWidth = hasDistance
+            ? distanceTextWidth + (showDistanceIcon ? distanceIconSide + distanceIconGap : 0)
+            : 0
+
+        let titleHeight = ceil(titleFont.lineHeight)
+        let subtitleRowHeight = hasSubtitle
+            ? max(ceil(subtitleFont.lineHeight), hasSubtitleIcon ? subtitleIconSide : 0)
+            : 0
+        let textColumnHeight = titleHeight + (hasSubtitle ? subtitleGap + subtitleRowHeight : 0)
+
+        let cardHeight = max(imageSize, textColumnHeight) + vPad * 2
+
+        // Fixed (non-text) horizontal space.
+        let fixedWidth = hPad + imageSize + imageTextGap
+            + (distanceBlockWidth > 0 ? textDistanceGap + distanceBlockWidth : 0)
+            + hPad
+        let naturalTextColumn = max(titleWidth, subtitleRowWidth)
+        let availableTextColumn = max(minTextColumnWidth, annotation.cardMaxWidth - fixedWidth)
+        let textColumnWidth = max(minTextColumnWidth, min(naturalTextColumn, availableTextColumn))
+
+        let totalWidth = fixedWidth + textColumnWidth
+        let totalHeight = cardHeight + tailHeight
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
+        container.backgroundColor = .clear
+        container.clipsToBounds = false
+
+        // Background shape: rounded card body + downward tail.
+        let bgLayer = CAShapeLayer()
+        bgLayer.name = bgLayerName
+        bgLayer.path = cardPath(
+            width: totalWidth,
+            cardHeight: cardHeight,
+            cornerRadius: min(annotation.cardCornerRadius, cardHeight / 2)
+        ).cgPath
+        bgLayer.fillColor = annotation.cardBackgroundColor.cgColor
+        container.layer.insertSublayer(bgLayer, at: 0)
+
+        // Leading image.
+        let imageY = (cardHeight - imageSize) / 2
+        let imageView = UIImageView(frame: CGRect(x: hPad, y: imageY, width: imageSize, height: imageSize))
+        imageView.tag = imageTag
+        imageView.contentMode = .scaleAspectFill
+        imageView.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        imageView.layer.cornerRadius = imageSize / 2
+        imageView.clipsToBounds = true
+        container.addSubview(imageView)
+
+        // Text column.
+        let textX = hPad + imageSize + imageTextGap
+        let textTop = (cardHeight - textColumnHeight) / 2
+
+        let titleLabel = UILabel(frame: CGRect(x: textX, y: textTop, width: textColumnWidth, height: titleHeight))
+        titleLabel.text = title
+        titleLabel.font = titleFont
+        titleLabel.textColor = annotation.cardTitleColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        container.addSubview(titleLabel)
+
+        if hasSubtitle {
+            let subtitleY = textTop + titleHeight + subtitleGap
+            var subtitleTextX = textX
+            if hasSubtitleIcon {
+                let iconY = subtitleY + (subtitleRowHeight - subtitleIconSide) / 2
+                let subtitleIcon = UIImageView(frame: CGRect(x: textX, y: iconY, width: subtitleIconSide, height: subtitleIconSide))
+                subtitleIcon.tag = subtitleIconTag
+                subtitleIcon.contentMode = .scaleAspectFit
+                subtitleIcon.tintColor = annotation.cardSubtitleColor
+                container.addSubview(subtitleIcon)
+                subtitleTextX += subtitleIconSide + subtitleIconGap
+            }
+            let subtitleLabel = UILabel(frame: CGRect(
+                x: subtitleTextX,
+                y: subtitleY,
+                width: max(0, textX + textColumnWidth - subtitleTextX),
+                height: subtitleRowHeight
+            ))
+            subtitleLabel.text = subtitle
+            subtitleLabel.font = subtitleFont
+            subtitleLabel.textColor = annotation.cardSubtitleColor
+            subtitleLabel.lineBreakMode = .byTruncatingTail
+            container.addSubview(subtitleLabel)
+        }
+
+        // Trailing distance block.
+        if hasDistance {
+            let distanceRight = totalWidth - hPad
+            let distanceBlockX = distanceRight - distanceBlockWidth
+            let distanceCenterY = cardHeight / 2
+            var distanceTextX = distanceBlockX
+            if showDistanceIcon {
+                let iconY = distanceCenterY - distanceIconSide / 2
+                let distanceIcon = UIImageView(frame: CGRect(x: distanceBlockX, y: iconY, width: distanceIconSide, height: distanceIconSide))
+                distanceIcon.tag = distanceIconTag
+                distanceIcon.contentMode = .scaleAspectFit
+                distanceIcon.tintColor = annotation.cardDistanceColor
+                distanceIcon.image = defaultDistanceIcon(annotation: annotation)
+                container.addSubview(distanceIcon)
+                distanceTextX += distanceIconSide + distanceIconGap
+            }
+            let distanceHeight = ceil(distanceFont.lineHeight)
+            let distanceLabel = UILabel(frame: CGRect(
+                x: distanceTextX,
+                y: distanceCenterY - distanceHeight / 2,
+                width: distanceTextWidth,
+                height: distanceHeight
+            ))
+            distanceLabel.text = distance
+            distanceLabel.font = distanceFont
+            distanceLabel.textColor = annotation.cardDistanceColor
+            distanceLabel.textAlignment = .right
+            container.addSubview(distanceLabel)
+        }
+
+        container.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: totalHeight))
+        return container
+    }
+
+    private static func defaultDistanceIcon(annotation: FlutterAnnotation) -> UIImage? {
+        if let data = annotation.cardDistanceIconPngData,
+           let image = UIImage(data: data, scale: UIScreen.main.scale) {
+            return image.withRenderingMode(.alwaysTemplate)
+        }
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: annotation.cardDistanceFontSize, weight: .regular)
+            return UIImage(systemName: "mappin.and.ellipse", withConfiguration: config)?
+                .withRenderingMode(.alwaysTemplate)
+        }
+        return nil
+    }
+
+    /// Rounded-rectangle card body with a centered downward-pointing tail.
+    private static func cardPath(width: CGFloat, cardHeight: CGFloat, cornerRadius: CGFloat) -> UIBezierPath {
+        let r = min(cornerRadius, min(width, cardHeight) / 2)
+        let path = UIBezierPath()
+        let tailHalf = tailWidth / 2
+        let midX = width / 2
+
+        // Top-left corner start.
+        path.move(to: CGPoint(x: r, y: 0))
+        path.addLine(to: CGPoint(x: width - r, y: 0))
+        path.addArc(withCenter: CGPoint(x: width - r, y: r), radius: r,
+                    startAngle: -.pi / 2, endAngle: 0, clockwise: true)
+        path.addLine(to: CGPoint(x: width, y: cardHeight - r))
+        path.addArc(withCenter: CGPoint(x: width - r, y: cardHeight - r), radius: r,
+                    startAngle: 0, endAngle: .pi / 2, clockwise: true)
+        // Bottom edge → tail → bottom edge.
+        path.addLine(to: CGPoint(x: midX + tailHalf, y: cardHeight))
+        path.addLine(to: CGPoint(x: midX, y: cardHeight + tailHeight))
+        path.addLine(to: CGPoint(x: midX - tailHalf, y: cardHeight))
+        path.addLine(to: CGPoint(x: r, y: cardHeight))
+        path.addArc(withCenter: CGPoint(x: r, y: cardHeight - r), radius: r,
+                    startAngle: .pi / 2, endAngle: .pi, clockwise: true)
+        path.addLine(to: CGPoint(x: 0, y: r))
+        path.addArc(withCenter: CGPoint(x: r, y: r), radius: r,
+                    startAngle: .pi, endAngle: -.pi / 2, clockwise: true)
+        path.close()
+        return path
+    }
+}

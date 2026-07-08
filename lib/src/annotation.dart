@@ -162,6 +162,7 @@ class Annotation {
     this.shadow,
     this.dopinMarker,
     this.svgMarker,
+    this.cardMarker,
   })  : assert(0.0 <= alpha && alpha <= 1.0),
         assert(0.0 <= glowIntensity && glowIntensity <= 1.0);
 
@@ -237,6 +238,11 @@ class Annotation {
   /// Pin-shaped icons usually use `anchor: Offset(0.5, 1.0)`.
   final SvgMarker? svgMarker;
 
+  /// When set (iOS), the marker is drawn as a native callout-style card with an
+  /// image, title, subtitle and a free-form distance string ([CardMarker]). The
+  /// card tail points down at [position], so use `anchor: Offset(0.5, 1.0)`.
+  final CardMarker? cardMarker;
+
   /// Creates a new [Annotation] object whose values are the same as this instance,
   /// unless overwritten by the specified parameters.
   Annotation copyWith({
@@ -258,6 +264,7 @@ class Annotation {
     MarkerShadow? shadowParam,
     DopinMarker? dopinMarkerParam,
     SvgMarker? svgMarkerParam,
+    CardMarker? cardMarkerParam,
   }) {
     return Annotation(
       annotationId: annotationId,
@@ -278,6 +285,7 @@ class Annotation {
       shadow: shadowParam ?? shadow,
       dopinMarker: dopinMarkerParam ?? dopinMarker,
       svgMarker: svgMarkerParam ?? svgMarker,
+      cardMarker: cardMarkerParam ?? cardMarker,
     );
   }
 
@@ -314,6 +322,9 @@ class Annotation {
     if (svgMarker != null) {
       json['svgMarker'] = svgMarker!._toJson();
     }
+    if (cardMarker != null) {
+      json['cardMarker'] = cardMarker!._toJson();
+    }
     return json;
   }
 
@@ -337,7 +348,8 @@ class Annotation {
         glowAnchor == typedOther.glowAnchor &&
         shadow == typedOther.shadow &&
         dopinMarker == typedOther.dopinMarker &&
-        svgMarker == typedOther.svgMarker;
+        svgMarker == typedOther.svgMarker &&
+        cardMarker == typedOther.cardMarker;
   }
 
   @override
@@ -358,6 +370,7 @@ class Annotation {
         shadow,
         dopinMarker,
         svgMarker,
+        cardMarker,
       );
 
   @override

@@ -216,6 +216,21 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         emoji: '🎉',
       ),
     ),
+    Annotation(
+      annotationId: const AnnotationId('marker_card'),
+      position: const LatLng(34.050, -118.250),
+      // The card tail points down at the position.
+      anchor: const Offset(0.5, 1.0),
+      onTap: () => _onMarkerTap('marker_card'),
+      shadow: _demoShadow,
+      cardMarker: const CardMarker(
+        title: 'Startbuck Market',
+        subtitle: 'Restaurant',
+        // Distance is a free-form string; unit is decided here in Flutter.
+        distance: '2.1 m',
+        imageUrl: 'https://i.pravatar.cc/150?img=15',
+      ),
+    ),
   };
 
   @override

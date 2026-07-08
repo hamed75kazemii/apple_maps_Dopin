@@ -63,6 +63,29 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var svgImagePngData: Data?
     var svgEmoji: String?
 
+    var usesCardMarker: Bool = false
+    var cardTitle: String?
+    var cardSubtitle: String?
+    var cardDistance: String?
+    var cardImageUrl: String?
+    var cardImagePngData: Data?
+    var cardImageAssetName: String?
+    var cardImageAssetScale: CGFloat = 1.0
+    var cardSubtitleIconUrl: String?
+    var cardSubtitleIconPngData: Data?
+    var cardDistanceIconPngData: Data?
+    var cardShowDistanceIcon: Bool = true
+    var cardBackgroundColor: UIColor = UIColor(red: 28/255, green: 28/255, blue: 30/255, alpha: 1)
+    var cardTitleColor: UIColor = .white
+    var cardSubtitleColor: UIColor = UIColor(white: 0.62, alpha: 1)
+    var cardDistanceColor: UIColor = UIColor(white: 0.62, alpha: 1)
+    var cardImageSize: CGFloat = 44
+    var cardCornerRadius: CGFloat = 22
+    var cardTitleFontSize: CGFloat = 17
+    var cardSubtitleFontSize: CGFloat = 14
+    var cardDistanceFontSize: CGFloat = 15
+    var cardMaxWidth: CGFloat = 320
+
     var dopinMarkerSignature: String {
         let pngLen = dopinImagePngData?.count ?? 0
         let asset = dopinImageAssetName ?? ""
@@ -74,6 +97,36 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var svgMarkerSignature: String {
         let pngLen = svgImagePngData?.count ?? 0
         return "\(svgWidth)|\(svgHeight)|\(svgImageUrl ?? "")|\(pngLen)|\(svgEmoji ?? "")"
+    }
+
+    var cardMarkerSignature: String {
+        let imgLen = cardImagePngData?.count ?? 0
+        let subIconLen = cardSubtitleIconPngData?.count ?? 0
+        let distIconLen = cardDistanceIconPngData?.count ?? 0
+        let asset = cardImageAssetName ?? ""
+        return [
+            cardTitle ?? "",
+            cardSubtitle ?? "",
+            cardDistance ?? "",
+            cardImageUrl ?? "",
+            "\(imgLen)",
+            asset,
+            "\(cardImageAssetScale)",
+            cardSubtitleIconUrl ?? "",
+            "\(subIconLen)",
+            "\(distIconLen)",
+            "\(cardShowDistanceIcon)",
+            "\(cardBackgroundColor)",
+            "\(cardTitleColor)",
+            "\(cardSubtitleColor)",
+            "\(cardDistanceColor)",
+            "\(cardImageSize)",
+            "\(cardCornerRadius)",
+            "\(cardTitleFontSize)",
+            "\(cardSubtitleFontSize)",
+            "\(cardDistanceFontSize)",
+            "\(cardMaxWidth)",
+        ].joined(separator: "|")
     }
 
     public init(fromDictionary annotationData: Dictionary<String, Any>, registrar: FlutterPluginRegistrar) {
@@ -225,6 +278,59 @@ class FlutterAnnotation: NSObject, MKAnnotation {
                 self.svgEmoji = trimmed.isEmpty ? nil : trimmed
             }
         }
+
+        if let card = annotationData["cardMarker"] as? Dictionary<String, Any> {
+            self.usesCardMarker = true
+            self.cardTitle = card["title"] as? String
+            self.cardSubtitle = card["subtitle"] as? String
+            self.cardDistance = card["distance"] as? String
+            if let url = card["imageUrl"] as? String, !url.isEmpty {
+                self.cardImageUrl = url
+            }
+            if let png = card["imagePng"] as? FlutterStandardTypedData {
+                self.cardImagePngData = png.data
+            }
+            if let assetData = card["imageFromAsset"] as? Array<Any>, !assetData.isEmpty {
+                let assetPath = assetData[0] as! String
+                self.cardImageAssetScale = CGFloat(assetData.count > 1 ? (assetData[1] as? Double ?? 1.0) : 1.0)
+                self.cardImageAssetName = registrar.lookupKey(forAsset: assetPath)
+            }
+            if let url = card["subtitleIconUrl"] as? String, !url.isEmpty {
+                self.cardSubtitleIconUrl = url
+            }
+            if let png = card["subtitleIconPng"] as? FlutterStandardTypedData {
+                self.cardSubtitleIconPngData = png.data
+            }
+            if let png = card["distanceIconPng"] as? FlutterStandardTypedData {
+                self.cardDistanceIconPngData = png.data
+            }
+            self.cardShowDistanceIcon = card["showDistanceIcon"] as? Bool ?? true
+            if let color = Self.argb(card["backgroundColor"]) {
+                self.cardBackgroundColor = Self.uiColorFromArgb(color)
+            }
+            if let color = Self.argb(card["titleColor"]) {
+                self.cardTitleColor = Self.uiColorFromArgb(color)
+            }
+            if let color = Self.argb(card["subtitleColor"]) {
+                self.cardSubtitleColor = Self.uiColorFromArgb(color)
+            }
+            if let color = Self.argb(card["distanceColor"]) {
+                self.cardDistanceColor = Self.uiColorFromArgb(color)
+            }
+            if let v = Self.cg(card["imageSize"]) { self.cardImageSize = v }
+            if let v = Self.cg(card["cornerRadius"]) { self.cardCornerRadius = v }
+            if let v = Self.cg(card["titleFontSize"]) { self.cardTitleFontSize = v }
+            if let v = Self.cg(card["subtitleFontSize"]) { self.cardSubtitleFontSize = v }
+            if let v = Self.cg(card["distanceFontSize"]) { self.cardDistanceFontSize = v }
+            if let v = Self.cg(card["maxWidth"]) { self.cardMaxWidth = v }
+        }
+    }
+
+    private static func argb(_ value: Any?) -> UInt32? {
+        if let n = value as? NSNumber { return n.uint32Value }
+        if let i = value as? Int { return UInt32(truncatingIfNeeded: UInt64(i)) }
+        if let i = value as? Int64 { return UInt32(truncatingIfNeeded: UInt64(i)) }
+        return nil
     }
 
     private static func cg(_ value: Any?) -> CGFloat? {
@@ -262,7 +368,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
     
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
-        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji
+        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature
     }
     
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {

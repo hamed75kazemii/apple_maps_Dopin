@@ -175,14 +175,21 @@ extension AppleMapController: AnnotationDelegate {
         let oldSvgSig = oldflutterAnnoation?.svgMarkerSignature
         let newSvgSig = annotation.svgMarkerSignature
         let svgUsageChanged = oldflutterAnnoation?.usesSvgMarker != annotation.usesSvgMarker
+        let oldCardSig = oldflutterAnnoation?.cardMarkerSignature
+        let newCardSig = annotation.cardMarkerSignature
+        let cardUsageChanged = oldflutterAnnoation?.usesCardMarker != annotation.usesCardMarker
         if annotationView == nil
             || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType
             || oldflutterAnnoation?.glow != annotation.glow
             || dopinUsageChanged
             || svgUsageChanged
+            || cardUsageChanged
             || (annotation.usesDopinMarker && oldDopinSig != newDopinSig)
-            || (annotation.usesSvgMarker && oldSvgSig != newSvgSig) {
-            if annotation.usesSvgMarker {
+            || (annotation.usesSvgMarker && oldSvgSig != newSvgSig)
+            || (annotation.usesCardMarker && oldCardSig != newCardSig) {
+            if annotation.usesCardMarker {
+                annotationView = getCardMarkerAnnotationView(annotation: annotation, id: identifier)
+            } else if annotation.usesSvgMarker {
                 annotationView = getSvgMarkerAnnotationView(annotation: annotation, id: identifier)
             } else if annotation.usesDopinMarker {
                 annotationView = getDopinMarkerAnnotationView(annotation: annotation, id: identifier)
@@ -204,6 +211,9 @@ extension AppleMapController: AnnotationDelegate {
         if let svgView = annotationView as? SvgMarkerAnnotationView {
             svgView.configureIfNeeded()
         }
+        if let cardView = annotationView as? CardMarkerAnnotationView {
+            cardView.configureIfNeeded()
+        }
         if let flutterView = annotationView as? FlutterAnnotationView {
             flutterView.applyFlutterMarkerShadow()
         }
@@ -216,7 +226,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         if annotation.icon.iconType != .MARKER {
             self.initInfoWindow(annotation: annotation, annotationView: annotationView!)
-            if annotation.icon.iconType != .PIN || annotation.usesDopinMarker || annotation.usesSvgMarker {
+            if annotation.icon.iconType != .PIN || annotation.usesDopinMarker || annotation.usesSvgMarker || annotation.usesCardMarker {
                 let x = (0.5 - annotation.anchor.x) * Double(annotationView!.frame.size.width)
                 let y = (0.5 - annotation.anchor.y) * Double(annotationView!.frame.size.height)
                 annotationView!.centerOffset = CGPoint(x: x, y: y)
@@ -390,6 +400,28 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.svgImageUrl = annotation.svgImageUrl
                 oldAnnotation.svgImagePngData = annotation.svgImagePngData
                 oldAnnotation.svgEmoji = annotation.svgEmoji
+                oldAnnotation.usesCardMarker = annotation.usesCardMarker
+                oldAnnotation.cardTitle = annotation.cardTitle
+                oldAnnotation.cardSubtitle = annotation.cardSubtitle
+                oldAnnotation.cardDistance = annotation.cardDistance
+                oldAnnotation.cardImageUrl = annotation.cardImageUrl
+                oldAnnotation.cardImagePngData = annotation.cardImagePngData
+                oldAnnotation.cardImageAssetName = annotation.cardImageAssetName
+                oldAnnotation.cardImageAssetScale = annotation.cardImageAssetScale
+                oldAnnotation.cardSubtitleIconUrl = annotation.cardSubtitleIconUrl
+                oldAnnotation.cardSubtitleIconPngData = annotation.cardSubtitleIconPngData
+                oldAnnotation.cardDistanceIconPngData = annotation.cardDistanceIconPngData
+                oldAnnotation.cardShowDistanceIcon = annotation.cardShowDistanceIcon
+                oldAnnotation.cardBackgroundColor = annotation.cardBackgroundColor
+                oldAnnotation.cardTitleColor = annotation.cardTitleColor
+                oldAnnotation.cardSubtitleColor = annotation.cardSubtitleColor
+                oldAnnotation.cardDistanceColor = annotation.cardDistanceColor
+                oldAnnotation.cardImageSize = annotation.cardImageSize
+                oldAnnotation.cardCornerRadius = annotation.cardCornerRadius
+                oldAnnotation.cardTitleFontSize = annotation.cardTitleFontSize
+                oldAnnotation.cardSubtitleFontSize = annotation.cardSubtitleFontSize
+                oldAnnotation.cardDistanceFontSize = annotation.cardDistanceFontSize
+                oldAnnotation.cardMaxWidth = annotation.cardMaxWidth
                 oldAnnotation.glow = annotation.glow
                 oldAnnotation.glowColorArgb = annotation.glowColorArgb
                 oldAnnotation.glowIntensity = annotation.glowIntensity
@@ -397,7 +429,7 @@ extension AppleMapController: AnnotationDelegate {
             })
             
             if let view = self.mapView.view(for: oldAnnotation) {
-                if annotation.usesDopinMarker || annotation.usesSvgMarker {
+                if annotation.usesDopinMarker || annotation.usesSvgMarker || annotation.usesCardMarker {
                     let newView = getAnnotationView(annotation: annotation)
                     view.frame.size = newView.frame.size
                     view.bounds = newView.bounds
@@ -477,6 +509,20 @@ extension AppleMapController: AnnotationDelegate {
         }
         annotationView.stickyZPosition = annotation.zIndex
         annotationView.canShowCallout = annotation.title != nil || annotation.subtitle != nil
+        return annotationView
+    }
+
+    private func getCardMarkerAnnotationView(annotation: FlutterAnnotation, id: String) -> CardMarkerAnnotationView {
+        let reuseId = "card_\(id)"
+        let annotationView: CardMarkerAnnotationView
+        if #available(iOS 11.0, *) {
+            self.mapView.register(CardMarkerAnnotationView.self, forAnnotationViewWithReuseIdentifier: reuseId)
+            annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: reuseId, for: annotation) as! CardMarkerAnnotationView
+        } else {
+            annotationView = CardMarkerAnnotationView(annotation: annotation, reuseIdentifier: reuseId)
+        }
+        annotationView.stickyZPosition = annotation.zIndex
+        annotationView.canShowCallout = false
         return annotationView
     }
 
