@@ -130,8 +130,8 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
 
     public init(fromDictionary annotationData: Dictionary<String, Any>, registrar: FlutterPluginRegistrar) {
-        let position: Array<Double> = annotationData["position"] as! Array<Double>
-        let infoWindow: Dictionary<String, Any> = annotationData["infoWindow"] as! Dictionary<String, Any>
+        let position = Self.coordinateValues(from: annotationData["position"])
+        let infoWindow = annotationData["infoWindow"] as? Dictionary<String, Any> ?? [:]
         let lat: Double = position[0]
         let long: Double = position[1]
         self.coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
@@ -326,11 +326,38 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         }
     }
 
+    /// Style-only annotation used to render [MKUserLocation] as a Dopin marker.
+    static func fromMyLocationMarker(
+        _ data: Dictionary<String, Any>,
+        registrar: FlutterPluginRegistrar
+    ) -> FlutterAnnotation {
+        var wrapped = data
+        wrapped["position"] = [0.0, 0.0]
+        wrapped["annotationId"] = "__user_location_style__"
+        wrapped["infoWindow"] = [:] as Dictionary<String, Any>
+        return FlutterAnnotation(fromDictionary: wrapped, registrar: registrar)
+    }
+
     private static func argb(_ value: Any?) -> UInt32? {
         if let n = value as? NSNumber { return n.uint32Value }
         if let i = value as? Int { return UInt32(truncatingIfNeeded: UInt64(i)) }
         if let i = value as? Int64 { return UInt32(truncatingIfNeeded: UInt64(i)) }
         return nil
+    }
+
+    private static func coordinateValues(from value: Any?) -> [Double] {
+        if let position = value as? [Double], position.count >= 2 {
+            return position
+        }
+        if let position = value as? [NSNumber], position.count >= 2 {
+            return position.map { $0.doubleValue }
+        }
+        if let position = value as? [Any], position.count >= 2 {
+            let lat = (position[0] as? NSNumber)?.doubleValue ?? (position[0] as? Double) ?? 0
+            let lng = (position[1] as? NSNumber)?.doubleValue ?? (position[1] as? Double) ?? 0
+            return [lat, lng]
+        }
+        return [0, 0]
     }
 
     private static func cg(_ value: Any?) -> CGFloat? {

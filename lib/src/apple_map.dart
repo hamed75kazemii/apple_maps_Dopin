@@ -24,6 +24,10 @@ typedef void CameraPositionCallback(CameraPosition position);
 /// Used in [AppleMap.onPOITap].
 typedef void ApplePOITapCallback(ApplePOIDetail poi);
 
+/// Called when the map's user-location tracking mode changes (e.g. user pans
+/// the map and follow mode is disabled by MapKit).
+typedef void TrackingModeCallback(TrackingMode mode);
+
 class AppleMap extends StatefulWidget {
   const AppleMap({
     Key? key,
@@ -44,6 +48,7 @@ class AppleMap extends StatefulWidget {
     this.pitchGesturesEnabled = true,
     this.myLocationEnabled = false,
     this.myLocationButtonEnabled = false,
+    this.myLocationMarker,
     this.padding = EdgeInsets.zero,
     this.annotations,
     this.polylines,
@@ -55,6 +60,7 @@ class AppleMap extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.onPOITap,
+    this.onTrackingModeChanged,
     this.snapshotOptions,
     this.insetsLayoutMarginsFromSafeArea = true,
   }) : super(key: key);
@@ -160,6 +166,10 @@ class AppleMap extends StatefulWidget {
   /// optional name and category when MapKit makes them available.
   final ApplePOITapCallback? onPOITap;
 
+  /// Fired when [TrackingMode] changes — including when the user pans/zooms
+  /// the map and MapKit exits follow mode automatically.
+  final TrackingModeCallback? onTrackingModeChanged;
+
   /// True if a "My Location" layer should be shown on the map.
   ///
   /// This layer includes a location indicator at the current device location,
@@ -188,6 +198,16 @@ class AppleMap extends StatefulWidget {
   /// See also:
   ///   * [myLocationEnabled] parameter.
   final bool myLocationButtonEnabled;
+
+  /// Optional user-location styling (iOS).
+  ///
+  /// Pass [MyLocationMarker.imageUrl] for a native [DopinMarker] avatar.
+  /// Omit [imageUrl] (or pass an empty string) to keep Apple Maps' default
+  /// blue-dot indicator.
+  ///
+  /// Setting this also turns on [myLocationEnabled] unless you pass
+  /// `myLocationEnabled: false` explicitly.
+  final MyLocationMarker? myLocationMarker;
 
   /// Which gestures should be consumed by the map.
   ///
@@ -367,6 +387,10 @@ class _AppleMapState extends State<AppleMap> {
   void onPOITap(ApplePOIDetail poi) {
     widget.onPOITap?.call(poi);
   }
+
+  void onTrackingModeChanged(TrackingMode mode) {
+    widget.onTrackingModeChanged?.call(mode);
+  }
 }
 
 /// Configuration options for the AppleMaps user interface.
@@ -388,6 +412,7 @@ class _AppleMapOptions {
     this.zoomGesturesEnabled,
     this.myLocationEnabled,
     this.myLocationButtonEnabled,
+    this.myLocationMarker,
     this.padding,
     this.insetsLayoutMarginsFromSafeArea,
     this.poiTapEnabled,
@@ -407,8 +432,10 @@ class _AppleMapOptions {
       pitchGesturesEnabled: map.pitchGesturesEnabled,
       trackingMode: map.trackingMode,
       zoomGesturesEnabled: map.zoomGesturesEnabled,
-      myLocationEnabled: map.myLocationEnabled,
+      myLocationEnabled:
+          map.myLocationEnabled || map.myLocationMarker != null,
       myLocationButtonEnabled: map.myLocationButtonEnabled,
+      myLocationMarker: map.myLocationMarker,
       padding: map.padding,
       insetsLayoutMarginsFromSafeArea: map.insetsLayoutMarginsFromSafeArea,
       poiTapEnabled: map.onPOITap != null,
@@ -442,6 +469,8 @@ class _AppleMapOptions {
 
   final bool? myLocationButtonEnabled;
 
+  final MyLocationMarker? myLocationMarker;
+
   final EdgeInsets? padding;
 
   final bool? insetsLayoutMarginsFromSafeArea;
@@ -474,12 +503,22 @@ class _AppleMapOptions {
     addIfNonNull('trackingMode', trackingMode?.index);
     addIfNonNull('myLocationEnabled', myLocationEnabled);
     addIfNonNull('myLocationButtonEnabled', myLocationButtonEnabled);
+    _addMyLocationMarker(optionsMap);
     addIfNonNull('padding', _serializePadding(padding));
     addIfNonNull(
         'insetsLayoutMarginsFromSafeArea', insetsLayoutMarginsFromSafeArea);
     addIfNonNull('poiTapEnabled', poiTapEnabled);
     addIfNonNull('showPointsOfInterest', showPointsOfInterest);
     return optionsMap;
+  }
+
+  void _addMyLocationMarker(Map<String, dynamic> optionsMap) {
+    final MyLocationMarker? marker = myLocationMarker;
+    if (marker == null) {
+      return;
+    }
+    optionsMap['myLocationMarker'] =
+        marker.hasCustomAvatar ? marker._toJson() : null;
   }
 
   Map<String, dynamic> updatesMap(_AppleMapOptions newOptions) {

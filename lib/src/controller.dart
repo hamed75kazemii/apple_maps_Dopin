@@ -83,6 +83,14 @@ class AppleMapController {
           _appleMapState.onPOITap(poi);
         }
         break;
+      case 'location#onTrackingModeChanged':
+        final int? index = call.arguments['trackingMode'] as int?;
+        if (index != null &&
+            index >= 0 &&
+            index < TrackingMode.values.length) {
+          _appleMapState.onTrackingModeChanged(TrackingMode.values[index]);
+        }
+        break;
       default:
         throw MissingPluginException();
     }
@@ -231,7 +239,7 @@ class AppleMapController {
   ///
   /// [verticalScreenOffset] (in screen points) shifts the camera target opposite
   /// the heading so that [center] appears that many points above the screen
-  /// center — useful when a bottom sheet or top bar covers part of the map and
+  /// center � useful when a bottom sheet or top bar covers part of the map and
   /// the focused point should sit in the visible area.
   ///
   /// [startBearing] overrides the initial heading; when omitted the map's
@@ -323,6 +331,36 @@ class AppleMapController {
     }
     final doubles = List<double>.from(point?['point']);
     return Offset(doubles.first, doubles.last);
+  }
+
+  /// Animates the camera to the user's current location.
+  ///
+  /// Requires [AppleMap.myLocationEnabled] or a [MyLocationMarker] on the map.
+  Future<void> goToMyLocation() async {
+    await channel.invokeMethod<void>('location#goToUser');
+  }
+
+  /// Sets how the map camera tracks the user's location.
+  ///
+  /// Requires [AppleMap.myLocationEnabled] or a [MyLocationMarker] on the map.
+  /// Use [TrackingMode.follow] to keep the camera centered on the user as they
+  /// move, or [TrackingMode.none] to stop following.
+  Future<void> setTrackingMode(TrackingMode mode) async {
+    await channel.invokeMethod<void>('location#setTrackingMode', <String, dynamic>{
+      'trackingMode': mode.index,
+    });
+  }
+
+  /// Starts following the user's location ([TrackingMode.follow]).
+  Future<void> followMyLocation({bool withHeading = false}) {
+    return setTrackingMode(
+      withHeading ? TrackingMode.followWithHeading : TrackingMode.follow,
+    );
+  }
+
+  /// Stops following the user's location ([TrackingMode.none]).
+  Future<void> stopFollowingMyLocation() {
+    return setTrackingMode(TrackingMode.none);
   }
 
   /// Returns the image bytes of the map

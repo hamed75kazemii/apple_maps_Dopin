@@ -35,9 +35,19 @@ class FlutterAnnotationView: MKAnnotationView {
     }
 
     func applyFlutterMarkerShadow(contentView: UIView? = nil) {
-        guard let flutter = annotation as? FlutterAnnotation else { return }
+        guard let flutter = resolvedFlutterAnnotation() else { return }
         let target = contentView ?? self
         MarkerShadowStyle.apply(to: target, from: flutter)
+    }
+
+    func resolvedFlutterAnnotation() -> FlutterAnnotation? {
+        if let flutter = annotation as? FlutterAnnotation {
+            return flutter
+        }
+        if annotation is MKUserLocation {
+            return (self as? DopinMarkerAnnotationView)?.userLocationStyle
+        }
+        return nil
     }
 }
 
@@ -85,7 +95,7 @@ class GlowFlutterAnnotationView: FlutterAnnotationView {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 1, bounds.height > 1 else { return }
-        guard let flutterAnnotation = annotation as? FlutterAnnotation, flutterAnnotation.glow else { return }
+        guard let flutterAnnotation = resolvedFlutterAnnotation(), flutterAnnotation.glow else { return }
 
         let side = Self.glowSide
         let center = Self.glowCenter(in: bounds, anchor: flutterAnnotation.glowAnchor)
@@ -416,6 +426,9 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     private static let contentTag = 8_441_001
     private static let imageTagBase = 8_441_002
 
+    /// Style payload when this view renders [MKUserLocation].
+    var userLocationStyle: FlutterAnnotation?
+
     private var configuredSignature: String?
     private var imageLoadToken: String?
 
@@ -425,6 +438,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        userLocationStyle = nil
         configuredSignature = nil
         imageLoadToken = nil
         viewWithTag(Self.contentTag)?.removeFromSuperview()
@@ -436,6 +450,16 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     override func layoutSubviews() {
         super.layoutSubviews()
         applyAnnotationIfNeeded(force: false)
+        if annotation is MKUserLocation, let style = userLocationStyle {
+            let width = Double(frame.size.width)
+            let height = Double(frame.size.height)
+            if width > 0, height > 0 {
+                centerOffset = CGPoint(
+                    x: (0.5 - style.anchor.x) * width,
+                    y: (0.5 - style.anchor.y) * height
+                )
+            }
+        }
     }
 
     func configureIfNeeded() {
@@ -446,8 +470,18 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         super.applyFlutterMarkerShadow(contentView: contentView ?? viewWithTag(Self.contentTag))
     }
 
+    override func resolvedFlutterAnnotation() -> FlutterAnnotation? {
+        if let flutter = annotation as? FlutterAnnotation {
+            return flutter
+        }
+        if annotation is MKUserLocation {
+            return userLocationStyle
+        }
+        return nil
+    }
+
     private func applyAnnotationIfNeeded(force: Bool) {
-        guard let flutter = annotation as? FlutterAnnotation, flutter.usesDopinMarker else { return }
+        guard let flutter = resolvedFlutterAnnotation(), flutter.usesDopinMarker else { return }
 
         let sig = flutter.dopinMarkerSignature
         if !force, sig == configuredSignature {

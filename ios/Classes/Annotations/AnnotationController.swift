@@ -152,6 +152,9 @@ extension AppleMapController: AnnotationDelegate {
 
     public func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         if annotation is MKUserLocation {
+            if self.mapView.usesCustomUserLocationMarker {
+                return hiddenUserLocationAnnotationView(for: annotation)
+            }
             return nil
         }
         // Let MapKit provide its default rendering for selectable POI features
@@ -510,6 +513,57 @@ extension AppleMapController: AnnotationDelegate {
         annotationView.stickyZPosition = annotation.zIndex
         annotationView.canShowCallout = annotation.title != nil || annotation.subtitle != nil
         return annotationView
+    }
+
+    private static let userLocationMarkerId = "__user_location__"
+    private static let userLocationMoveDuration: TimeInterval = 0.85
+
+    func syncUserLocationMarker(at coordinate: CLLocationCoordinate2D) {
+        guard let markerData = mapView.userLocationMarkerData else { return }
+        guard FlutterMapView.isValidUserCoordinate(coordinate) else { return }
+
+        if let existing = getAnnotation(with: Self.userLocationMarkerId) {
+            let latDelta = abs(existing.coordinate.latitude - coordinate.latitude)
+            let lngDelta = abs(existing.coordinate.longitude - coordinate.longitude)
+            if latDelta < 0.0000001 && lngDelta < 0.0000001 {
+                return
+            }
+            UIView.animate(
+                withDuration: Self.userLocationMoveDuration,
+                delay: 0,
+                options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction],
+                animations: {
+                    existing.coordinate = coordinate
+                }
+            )
+            return
+        }
+
+        var wrapped = markerData
+        wrapped["position"] = [coordinate.latitude, coordinate.longitude]
+        wrapped["annotationId"] = Self.userLocationMarkerId
+        wrapped["infoWindow"] = [:] as Dictionary<String, Any>
+        wrapped["visible"] = true
+        let annotation = FlutterAnnotation(fromDictionary: wrapped, registrar: registrar)
+        annotation.zIndex = 1_000
+        addAnnotation(annotation: annotation)
+    }
+
+    private func hiddenUserLocationAnnotationView(for annotation: MKAnnotation) -> MKAnnotationView {
+        let reuseId = "hidden_mk_user_location"
+        let view = mapView.dequeueReusableAnnotationView(withIdentifier: reuseId)
+            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: reuseId)
+        view.annotation = annotation
+        view.isHidden = true
+        view.alpha = 0
+        view.isEnabled = false
+        view.canShowCallout = false
+        return view
+    }
+
+    func removeUserLocationMarker() {
+        removeAnnotation(id: Self.userLocationMarkerId)
+        mapView.lastUserCoordinate = nil
     }
 
     private func getCardMarkerAnnotationView(annotation: FlutterAnnotation, id: String) -> CardMarkerAnnotationView {

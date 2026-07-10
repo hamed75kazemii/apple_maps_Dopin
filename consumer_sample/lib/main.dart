@@ -48,6 +48,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   int _focusGeneration = 0;
   bool _focusTransitionActive = false;
   bool _gesturesLocked = false;
+  bool _followMyLocation = false;
   Completer<void>? _cameraIdleCompleter;
 
   static const Duration _focusFlyDuration = Duration(milliseconds: 420);
@@ -80,19 +81,19 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   ];
   static const MarkerShadow _demoShadow = MarkerShadow();
 
-  static const DopinMarker _singleImageMarker = DopinMarker(
-    imageUrls: <String>['https://i.pravatar.kklcc/150?imhhgg=12'],
-    // count: 12,
-    // label: '1',
-    width: 46,
-    height: 46,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderRadius: 12,
-    labelColor: _labelColor,
-    labelGradientColors: _labelGradientColors,
-    label: 'Me',
-  );
+  // static const DopinMarker _singleImageMarker = DopinMarker(
+  //   imageUrls: <String>['https://i.pravatar.kklcc/150?imhhgg=12'],
+  //   // count: 12,
+  //   // label: '1',
+  //   width: 46,
+  //   height: 46,
+  //   borderWidth: 3,
+  //   borderColor: Colors.white,
+  //   borderRadius: 12,
+  //   labelColor: _labelColor,
+  //   labelGradientColors: _labelGradientColors,
+  //   label: 'Me',
+  // );
 
   static const DopinMarker _dualImageMarker = DopinMarker(
     imageUrls: _demoDualUrls,
@@ -137,16 +138,16 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   bool get _isFocused => _focusedPoi != null;
 
   late final Set<Annotation> _annotations = <Annotation>{
-    Annotation(
-      annotationId: const AnnotationId('marker_single'),
-      position: const LatLng(34.0522, -118.2437),
-      onTap: () => _onMarkerTap('marker_single'),
-      shadow: _demoShadow,
-      dopinMarker: _singleImageMarker,
-      glow: true,
-      // Avatar center: x = 46/2, y = 46/2 inside total height 46 + 18 - 8 = 56.
-      glowAnchor: const Offset(0.5, 23 / 56),
-    ),
+    // Annotation(
+    //   annotationId: const AnnotationId('marker_single'),
+    //   position: const LatLng(34.0522, -118.2437),
+    //   onTap: () => _onMarkerTap('marker_single'),
+    //   shadow: _demoShadow,
+    //   dopinMarker: _singleImageMarker,
+    //   glow: true,
+    //   // Avatar center: x = 46/2, y = 46/2 inside total height 46 + 18 - 8 = 56.
+    //   glowAnchor: const Offset(0.5, 23 / 56),
+    // ),
     Annotation(
       annotationId: const AnnotationId('marker_dual'),
       position: const LatLng(34.056, -118.2437),
@@ -428,6 +429,28 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     }
   }
 
+  void _onTrackingModeChanged(TrackingMode mode) {
+    final following = mode != TrackingMode.none;
+    if (_followMyLocation == following) return;
+    setState(() => _followMyLocation = following);
+  }
+
+  Future<void> _onGoToMyLocation() async {
+    final controller = _controller;
+    if (controller == null) return;
+    if (_isFocused) {
+      await _clearFocus();
+    }
+
+    if (_followMyLocation) {
+      await controller.stopFollowingMyLocation();
+      return;
+    }
+
+    await controller.goToMyLocation();
+    await controller.followMyLocation();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
@@ -479,6 +502,28 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
               onTap: _onMapTap,
               onCameraMove: _onCameraMove,
               onCameraIdle: _onCameraIdle,
+              onTrackingModeChanged: _onTrackingModeChanged,
+              myLocationMarker: const MyLocationMarker(
+                imageUrl: 'https://i.pravatar.cc/150?img=12',
+              ),
+              myLocationButtonEnabled: false,
+            ),
+
+            Positioned(
+              right: 16,
+              bottom: MediaQuery.paddingOf(context).bottom + 24,
+              child: FloatingActionButton.small(
+                heroTag: 'go_to_my_location',
+                tooltip: _followMyLocation ? 'توقف فالو' : 'فالو موقعیت من',
+                backgroundColor: _followMyLocation
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+                foregroundColor: _followMyLocation
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : null,
+                onPressed: _onGoToMyLocation,
+                child: Icon(_followMyLocation ? Icons.gps_fixed : Icons.my_location),
+              ),
             ),
 
             _FocusSheetSwitcher(

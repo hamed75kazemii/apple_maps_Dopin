@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 part 'src/marker_shadow.dart';
 part 'src/annotation.dart';
 part 'src/dopin_marker.dart';
+part 'src/my_location_marker.dart';
 part 'src/svg_marker.dart';
 part 'src/card_marker.dart';
 part 'src/annotation_updates.dart';

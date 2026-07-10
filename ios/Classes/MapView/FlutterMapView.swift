@@ -22,6 +22,21 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     var isMyLocationButtonShowing: Bool? = false
     /// Mirrors Flutter `onPOITap != null`; when false, built-in POIs are not selectable.
     var isPOITapEnabled: Bool = false
+
+    /// Raw Flutter [MyLocationMarker] JSON when a custom avatar URL is set.
+    var userLocationMarkerData: Dictionary<String, Any>?
+
+    var usesCustomUserLocationMarker: Bool {
+        return userLocationMarkerData != nil
+    }
+
+    /// Called when Core Location delivers a new fix (custom marker mode).
+    var onUserLocationUpdate: ((CLLocationCoordinate2D) -> Void)?
+
+    /// Called when location tracking stops (custom marker mode).
+    var onUserLocationClear: (() -> Void)?
+
+    var lastUserCoordinate: CLLocationCoordinate2D?
     
     fileprivate let locationManager: CLLocationManager = CLLocationManager()
     
@@ -58,10 +73,16 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         MKUserTrackingMode.followWithHeading,
     ]
     
-    convenience init(channel: FlutterMethodChannel, options: Dictionary<String, Any>) {
+    convenience init(
+        channel: FlutterMethodChannel,
+        options: Dictionary<String, Any>,
+        userLocationMarkerData: Dictionary<String, Any>? = nil
+    ) {
         self.init(frame: CGRect.zero)
         self.channel = channel
         self.options = options
+        self.userLocationMarkerData = userLocationMarkerData
+        self.locationManager.delegate = self
         initialiseTapGestureRecognizers()
         self.applyPOITapInteraction(enabled: Self.poiTapEnabled(from: options))
         self.overrideUserInterfaceStyle = .light
@@ -289,31 +310,45 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     }
 
     func setUserLocation() {
-        let authorizationStatus = CLLocationManager.authorizationStatus()
-        
-        switch authorizationStatus {
+        locationManager.delegate = self
+        let status = currentAuthorizationStatus()
+
+        switch status {
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
-            break
-            
-        case .authorizedAlways:
-            fallthrough
-        case .authorizedWhenInUse:
-            locationManager.requestWhenInUseAuthorization()
-            locationManager.desiredAccuracy = kCLLocationAccuracyBest
-            locationManager.distanceFilter = kCLDistanceFilterNone
-            locationManager.startUpdatingLocation()
-            self.showsUserLocation = true
-            break
-            
+            showsUserLocation = true
+        case .authorizedAlways, .authorizedWhenInUse:
+            showsUserLocation = true
+            publishUserLocationFromMapKitIfNeeded()
         default:
-            print("\(authorizationStatus.rawValue) is not supported.")
+            print("Location authorization not granted: \(status.rawValue)")
         }
+    }
+
+    /// Reads MapKit's [MKUserLocation] (requires [showsUserLocation]).
+    func publishUserLocationFromMapKitIfNeeded() {
+        guard usesCustomUserLocationMarker else { return }
+        let coordinate = userLocation.coordinate
+        guard Self.isValidUserCoordinate(coordinate) else { return }
+        lastUserCoordinate = coordinate
+        onUserLocationUpdate?(coordinate)
+    }
+
+    static func isValidUserCoordinate(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return false }
+        return abs(coordinate.latitude) > 0.0001 || abs(coordinate.longitude) > 0.0001
+    }
+
+    private func currentAuthorizationStatus() -> CLAuthorizationStatus {
+        if #available(iOS 14.0, *) {
+            return locationManager.authorizationStatus
+        }
+        return CLLocationManager.authorizationStatus()
     }
     
     func removeUserLocation() {
-        locationManager.stopUpdatingLocation()
         self.showsUserLocation = false
+        self.onUserLocationClear?()
     }
     
     // Functions used for the mapTrackingButton
@@ -356,7 +391,49 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     }
     
     @objc func centerMapOnUserButtonClicked() {
-       self.setUserTrackingMode(MKUserTrackingMode.follow, animated: true)
+        goToUserLocation()
+    }
+
+    func goToUserLocation() {
+        let coordinate = resolvedUserCoordinate()
+        if let coordinate = coordinate {
+            let targetZoom = max(calculatedZoomLevel, 15)
+            if #available(iOS 9.0, *) {
+                setCenterCoordinateWithAltitude(
+                    centerCoordinate: coordinate,
+                    zoomLevel: targetZoom,
+                    animated: true
+                )
+            } else {
+                setCenterCoordinateRegion(
+                    centerCoordinate: coordinate,
+                    zoomLevel: targetZoom,
+                    animated: true
+                )
+            }
+            return
+        }
+        setUserTrackingMode(MKUserTrackingMode.follow, animated: true)
+    }
+
+    func setTrackingModeIndex(_ index: Int, animated: Bool) {
+        guard index >= 0 && index < userTrackingModes.count else { return }
+        let mode = userTrackingModes[index]
+        if mode != .none {
+            setUserLocation()
+        }
+        setUserTrackingMode(mode, animated: animated)
+    }
+
+    private func resolvedUserCoordinate() -> CLLocationCoordinate2D? {
+        if let cached = lastUserCoordinate, Self.isValidUserCoordinate(cached) {
+            return cached
+        }
+        let mapKitCoordinate = userLocation.coordinate
+        if Self.isValidUserCoordinate(mapKitCoordinate) {
+            return mapKitCoordinate
+        }
+        return nil
     }
     
     func getMapViewAnnotations() -> [FlutterAnnotation?] {
@@ -513,5 +590,31 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         let xDist = a.x - b.x
         let yDist = a.y - b.y
         return CGFloat(sqrt(xDist * xDist + yDist * yDist))
+    }
+}
+
+extension FlutterMapView: CLLocationManagerDelegate {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        if #available(iOS 14.0, *) {
+            handleAuthorizationChange(manager.authorizationStatus)
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        handleAuthorizationChange(status)
+    }
+
+    private func handleAuthorizationChange(_ status: CLAuthorizationStatus) {
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            showsUserLocation = true
+            publishUserLocationFromMapKitIfNeeded()
+        default:
+            break
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("User location error: \(error.localizedDescription)")
     }
 }

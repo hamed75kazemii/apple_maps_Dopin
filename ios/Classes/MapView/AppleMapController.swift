@@ -85,9 +85,15 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     public init(withFrame frame: CGRect, withRegistrar registrar: FlutterPluginRegistrar, withargs args: Dictionary<String, Any> ,withId id: Int64) {
         self.options = args["options"] as! [String: Any]
         self.channel = FlutterMethodChannel(name: "apple_maps_plugin.luisthein.de/apple_maps_\(id)", binaryMessenger: registrar.messenger())
-        
-        self.mapView = FlutterMapView(channel: channel, options: options)
         self.registrar = registrar
+
+        let userLocationMarkerData = Self.customUserLocationMarkerData(from: self.options)
+
+        self.mapView = FlutterMapView(
+            channel: channel,
+            options: options,
+            userLocationMarkerData: userLocationMarkerData
+        )
         
         // To stop the odd movement of the Apple logo.
         self.contentView = UIScrollView()
@@ -99,9 +105,21 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         super.init()
         
         self.mapView.delegate = self
+
+        self.mapView.onUserLocationUpdate = { [weak self] coordinate in
+            self?.syncUserLocationMarker(at: coordinate)
+        }
+        self.mapView.onUserLocationClear = { [weak self] in
+            self?.removeUserLocationMarker()
+        }
         
         self.mapView.setCenterCoordinate(initialCameraPosition, animated: false)
         self.setMethodCallHandlers()
+        self.applyMyLocationMarker(from: self.options)
+        syncUserLocationMarkerIfAvailable()
+        DispatchQueue.main.async { [weak self] in
+            self?.syncUserLocationMarkerIfAvailable()
+        }
         
         if let annotationsToAdd: NSArray = args["annotationsToAdd"] as? NSArray {
             self.annotationsToAdd(annotations: annotationsToAdd)
@@ -119,6 +137,35 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     
     public func view() -> UIView {
         return contentView
+    }
+
+    private func applyMyLocationMarker(from options: Dictionary<String, Any>) {
+        guard options.keys.contains("myLocationMarker") else { return }
+
+        if let markerData = Self.customUserLocationMarkerData(from: options) {
+            mapView.userLocationMarkerData = markerData
+            if options["myLocationEnabled"] as? Bool == true {
+                mapView.setUserLocation()
+            }
+        } else {
+            mapView.userLocationMarkerData = nil
+            removeUserLocationMarker()
+            if options["myLocationEnabled"] as? Bool == true {
+                mapView.setUserLocation()
+            } else {
+                mapView.removeUserLocation()
+            }
+        }
+    }
+
+    func syncUserLocationMarkerIfAvailable() {
+        mapView.publishUserLocationFromMapKitIfNeeded()
+    }
+
+    private static func customUserLocationMarkerData(
+        from options: Dictionary<String, Any>
+    ) -> Dictionary<String, Any>? {
+        return options["myLocationMarker"] as? Dictionary<String, Any>
     }
     
     private func setMethodCallHandlers() {
@@ -151,7 +198,9 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     result(nil)
                     break
                 case "map#update":
-                    self.mapView.interpretOptions(options: args["options"] as! Dictionary<String, Any>)
+                    let options = args["options"] as! Dictionary<String, Any>
+                    self.mapView.interpretOptions(options: options)
+                    self.applyMyLocationMarker(from: options)
                     break
                 case "camera#animate":
                     self.animateCamera(args: args)
@@ -176,6 +225,12 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     self.takeSnapshot(options: SnapshotOptions.init(options: args), onCompletion: { (snapshot: FlutterStandardTypedData?, error: Error?) -> Void in
                         result(snapshot ?? error)
                     })
+                case "location#setTrackingMode":
+                    if let mode = args["trackingMode"] as? Int {
+                        self.mapView.setTrackingModeIndex(mode, animated: true)
+                    }
+                    result(nil)
+                    break
                 default:
                     result(FlutterMethodNotImplemented)
                     break
@@ -215,6 +270,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     break
                 case "camera#stopOrbit":
                     self.stopOrbit()
+                    result(nil)
+                    break
+                case "location#goToUser":
+                    self.mapView.goToUserLocation()
                     result(nil)
                     break
                 default:
@@ -702,6 +761,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 extension AppleMapController: MKMapViewDelegate {
     // onIdle
     public func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        self.syncUserLocationMarkerIfAvailable()
         // While the native orbit is running we drive the camera every frame; emitting
         // camera#onMove/onIdle here would flood the Flutter channel and defeat the
         // whole point of moving the orbit off the Dart timer. stopOrbit() sends a
@@ -723,6 +783,15 @@ extension AppleMapController: MKMapViewDelegate {
         if self.isDrivingCamera { return }
         self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
     }
+
+    public func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+        let modes = self.mapView.userTrackingModes
+        let index = modes.firstIndex(of: mode) ?? 0
+        self.channel.invokeMethod(
+            "location#onTrackingModeChanged",
+            arguments: ["trackingMode": index]
+        )
+    }
     
     public func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if overlay is FlutterPolyline {
@@ -733,6 +802,18 @@ extension AppleMapController: MKMapViewDelegate {
             return self.circleRenderer(overlay: overlay)
         }
         return MKOverlayRenderer()
+    }
+
+    public func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+        handleUserLocationUpdate(userLocation)
+    }
+
+    private func handleUserLocationUpdate(_ userLocation: MKUserLocation) {
+        guard self.mapView.usesCustomUserLocationMarker else { return }
+        let coordinate = userLocation.coordinate
+        guard FlutterMapView.isValidUserCoordinate(coordinate) else { return }
+        self.mapView.lastUserCoordinate = coordinate
+        syncUserLocationMarker(at: coordinate)
     }
 }
 
