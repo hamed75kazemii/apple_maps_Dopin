@@ -1478,3 +1478,313 @@ final class CardMarkerAnnotationView: GlowFlutterAnnotationView {
         return path
     }
 }
+
+// MARK: - Cluster markers
+
+enum ClusterMemberPreviewResolver {
+
+    static func signature(for members: [FlutterAnnotation], totalCount: Int) -> String {
+        let previews = members.prefix(3).map { memberSignature($0) }.joined(separator: "|")
+        return "\(totalCount)|\(previews)"
+    }
+
+    static func memberSignature(_ annotation: FlutterAnnotation) -> String {
+        if annotation.usesDopinMarker { return annotation.dopinMarkerSignature }
+        if annotation.usesSvgMarker { return annotation.svgMarkerSignature }
+        if annotation.usesCardMarker { return annotation.cardMarkerSignature }
+        return annotation.id
+    }
+
+    static func loadPreview(for annotation: FlutterAnnotation, completion: @escaping (UIImage?) -> Void) {
+        if annotation.usesDopinMarker {
+            DopinMarkerImageLoader.load(for: annotation, completion: completion)
+            return
+        }
+        if annotation.usesSvgMarker {
+            if let emoji = annotation.svgEmoji, !emoji.isEmpty {
+                completion(SvgMarkerImageLoader.emojiImage(emoji, side: 32))
+                return
+            }
+            SvgMarkerImageLoader.loadCenterImage(for: annotation) { image in
+                if let image = image {
+                    completion(image)
+                } else {
+                    completion(SvgMarkerImageLoader.eventFillMarkerImage(width: 24, height: 32))
+                }
+            }
+            return
+        }
+        if annotation.usesCardMarker {
+            loadCardPreview(annotation, completion: completion)
+            return
+        }
+        if let image = annotation.icon.image {
+            completion(image)
+            return
+        }
+        completion(DopinMarkerImageLoader.blankProfileImage)
+    }
+
+    private static func loadCardPreview(
+        _ annotation: FlutterAnnotation,
+        completion: @escaping (UIImage?) -> Void
+    ) {
+        if let data = annotation.cardImagePngData,
+           let image = UIImage(data: data, scale: UIScreen.main.scale) {
+            completion(image)
+            return
+        }
+        if let name = annotation.cardImageAssetName, let base = UIImage(named: name) {
+            let scale = annotation.cardImageAssetScale
+            if abs(scale - 1.0) < 0.001, let cg = base.cgImage {
+                completion(UIImage(cgImage: cg, scale: UIScreen.main.scale, orientation: base.imageOrientation))
+            } else if let cg = base.cgImage {
+                completion(UIImage(cgImage: cg, scale: scale, orientation: base.imageOrientation))
+            } else {
+                completion(base)
+            }
+            return
+        }
+        DopinMarkerImageLoader.load(urlString: annotation.cardImageUrl, completion: completion)
+    }
+
+    static func moreLabelText(memberCount: Int, previewCount: Int) -> String? {
+        let remaining = max(0, memberCount - previewCount)
+        guard remaining > 0 else { return nil }
+        if remaining >= 5 {
+            return "\(remaining)+ more"
+        }
+        return remaining == 1 ? "1 more" : "\(remaining) more"
+    }
+}
+
+@available(iOS 11.0, *)
+final class ClusterMarkerAnnotationView: MKAnnotationView {
+
+    static let reuseId = "cluster_marker"
+
+    private static let contentTag = 8_445_001
+    private static let imageTagBase = 8_445_010
+
+    private struct AvatarPlacement {
+        let side: CGFloat
+        let cornerRadius: CGFloat
+        let rotationDegrees: CGFloat
+        let center: CGPoint
+    }
+
+    private static let avatarPlacements: [AvatarPlacement] = [
+        AvatarPlacement(side: 33.187, cornerRadius: 10, rotationDegrees: -8.1, center: CGPoint(x: 30, y: 30)),
+        AvatarPlacement(side: 40, cornerRadius: 12, rotationDegrees: 10.88, center: CGPoint(x: 48, y: 34)),
+        AvatarPlacement(side: 28.053, cornerRadius: 8, rotationDegrees: 2.75, center: CGPoint(x: 38, y: 16)),
+    ]
+
+    private var configuredSignature: String?
+    private var imageLoadToken: String?
+
+    override var annotation: MKAnnotation? {
+        didSet { applyClusterIfNeeded(force: true) }
+    }
+
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        canShowCallout = false
+        clipsToBounds = false
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        configuredSignature = nil
+        imageLoadToken = nil
+        viewWithTag(Self.contentTag)?.removeFromSuperview()
+        bounds = .zero
+        frame = .zero
+    }
+
+    func configureIfNeeded() {
+        applyClusterIfNeeded(force: true)
+    }
+
+    private func applyClusterIfNeeded(force: Bool) {
+        guard let cluster = annotation as? MKClusterAnnotation else { return }
+
+        let members = cluster.memberAnnotations.compactMap { $0 as? FlutterAnnotation }
+        let sig = ClusterMemberPreviewResolver.signature(
+            for: members,
+            totalCount: cluster.memberAnnotations.count
+        )
+        if !force, sig == configuredSignature { return }
+        configuredSignature = sig
+
+        viewWithTag(Self.contentTag)?.removeFromSuperview()
+        image = nil
+
+        let memberCount = cluster.memberAnnotations.count
+        let previewSlots = min(3, memberCount)
+        let content = Self.buildClusterContent(
+            memberCount: memberCount,
+            previewSlots: previewSlots
+        )
+        content.tag = Self.contentTag
+        addSubview(content)
+
+        let size = content.bounds.size
+        bounds = CGRect(origin: .zero, size: size)
+        frame.size = size
+        content.frame = bounds
+        centerOffset = CGPoint(x: 0, y: -size.height / 2)
+
+        loadPreviewImages(into: content, members: Array(members.prefix(previewSlots)))
+    }
+
+    private func loadPreviewImages(into content: UIView, members: [FlutterAnnotation]) {
+        let token = configuredSignature ?? UUID().uuidString
+        imageLoadToken = token
+
+        for (index, member) in members.enumerated() {
+            guard let imageView = content.viewWithTag(Self.imageTagBase + index) as? UIImageView else {
+                continue
+            }
+            ClusterMemberPreviewResolver.loadPreview(for: member) { [weak self] image in
+                guard let self = self, self.imageLoadToken == token else { return }
+                DopinMarkerImageLoader.applyProfileImage(image, to: imageView)
+            }
+        }
+    }
+
+    private static func buildClusterContent(memberCount: Int, previewSlots: Int) -> UIView {
+        let stackHeight: CGFloat = 52
+        let labelFontSize: CGFloat = 12
+        let labelSpacing: CGFloat = 6
+        let labelText = ClusterMemberPreviewResolver.moreLabelText(
+            memberCount: memberCount,
+            previewCount: previewSlots
+        )
+        let hasLabel = labelText != nil
+
+        let labelHeight: CGFloat = hasLabel ? ceil(labelFontSize * 1.7) : 0
+        let totalHeight = stackHeight + (hasLabel ? labelSpacing + labelHeight : 0)
+        let totalWidth: CGFloat = 76
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
+        container.clipsToBounds = false
+        container.backgroundColor = .clear
+
+        let stackView = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: stackHeight))
+        stackView.clipsToBounds = false
+        container.addSubview(stackView)
+
+        for index in 0..<previewSlots {
+            let placement = avatarPlacements[index]
+            let avatar = makeRotatedAvatar(placement: placement, imageTag: imageTagBase + index)
+            stackView.addSubview(avatar)
+        }
+
+        if let labelText = labelText {
+            let labelY = stackHeight + labelSpacing
+            let label = makeClusterLabel(
+                text: labelText,
+                fontSize: labelFontSize,
+                frame: CGRect(x: 0, y: labelY, width: totalWidth, height: labelHeight)
+            )
+            container.addSubview(label)
+        }
+
+        container.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: totalHeight))
+        return container
+    }
+
+    private static func makeClusterLabel(text: String, fontSize: CGFloat, frame: CGRect) -> UILabel {
+        let font: UIFont
+        if let rounded = UIFont(name: "SFProRounded-Semibold", size: fontSize) {
+            font = rounded
+        } else {
+            font = .systemFont(ofSize: fontSize, weight: .semibold)
+        }
+
+        let label = ClusterOutlinedLabel(frame: frame)
+        label.textAlignment = .center
+        label.backgroundColor = .clear
+        label.numberOfLines = 1
+        label.font = font
+        label.text = text
+        label.fillColor = UIColor(red: 19 / 255, green: 19 / 255, blue: 19 / 255, alpha: 1)
+        label.outlineColor = .white
+        label.outlineWidth = 3
+        return label
+    }
+
+    private static func makeRotatedAvatar(placement: AvatarPlacement, imageTag: Int) -> UIView {
+        let borderWidth: CGFloat = 3
+        let side = placement.side
+        let outer = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        outer.backgroundColor = .white
+        outer.layer.cornerRadius = placement.cornerRadius
+        outer.clipsToBounds = false
+        outer.layer.shadowColor = UIColor.black.cgColor
+        outer.layer.shadowOpacity = 0.14
+        outer.layer.shadowRadius = 8.95
+        outer.layer.shadowOffset = CGSize(width: 0, height: 4)
+        outer.layer.masksToBounds = false
+
+        let innerSide = max(0, side - borderWidth * 2)
+        let innerRadius = max(0, placement.cornerRadius - borderWidth)
+        let imageView = UIImageView(frame: CGRect(x: borderWidth, y: borderWidth, width: innerSide, height: innerSide))
+        imageView.tag = imageTag
+        imageView.contentMode = .scaleAspectFill
+        imageView.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        imageView.layer.cornerRadius = innerRadius
+        imageView.clipsToBounds = true
+        outer.addSubview(imageView)
+
+        let wrapper = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        wrapper.backgroundColor = .clear
+        wrapper.clipsToBounds = false
+        wrapper.addSubview(outer)
+        outer.center = CGPoint(x: side / 2, y: side / 2)
+        wrapper.center = placement.center
+        wrapper.transform = CGAffineTransform(rotationAngle: placement.rotationDegrees * .pi / 180)
+        return wrapper
+    }
+}
+
+/// Draws cluster label text with a white outline and solid dark fill on top.
+private final class ClusterOutlinedLabel: UILabel {
+
+    var outlineColor: UIColor = .white
+    var outlineWidth: CGFloat = 3
+    var fillColor: UIColor = UIColor(red: 19 / 255, green: 19 / 255, blue: 19 / 255, alpha: 1)
+
+    override func drawText(in rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext(), let text = text, let font = font else {
+            super.drawText(in: rect)
+            return
+        }
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = textAlignment
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraph,
+        ]
+
+        context.setLineJoin(.round)
+        context.setLineWidth(outlineWidth)
+
+        context.setTextDrawingMode(.stroke)
+        (text as NSString).draw(in: rect, withAttributes: attributes.merging([
+            .foregroundColor: outlineColor,
+        ]) { _, new in new })
+
+        context.setTextDrawingMode(.fill)
+        (text as NSString).draw(in: rect, withAttributes: attributes.merging([
+            .foregroundColor: fillColor,
+        ]) { _, new in new })
+    }
+}

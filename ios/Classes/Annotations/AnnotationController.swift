@@ -10,7 +10,18 @@ import MapKit
 
 extension AppleMapController: AnnotationDelegate {
 
+    private static let clusterIdentifier = "apple_maps_flutter_cluster"
+    private static let clusterZoomPadding: CGFloat = 60
+
     public func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView)  {
+        if #available(iOS 11.0, *), let cluster = view.annotation as? MKClusterAnnotation {
+            self.zoomToCluster(cluster, animated: true)
+            let clusterToDeselect = cluster
+            DispatchQueue.main.async { [weak self] in
+                self?.mapView.deselectAnnotation(clusterToDeselect, animated: false)
+            }
+            return
+        }
         if let annotation: FlutterAnnotation = view.annotation as? FlutterAnnotation  {
             self.currentlySelectedAnnotation = annotation.id
             if !annotation.selectedProgrammatically {
@@ -45,6 +56,14 @@ extension AppleMapController: AnnotationDelegate {
     /// to Flutter is gated to iOS 17+ where `selectableMapFeatures` is supported.
     @available(iOS 16.0, *)
     public func mapView(_ mapView: MKMapView, didSelect annotation: MKAnnotation) {
+        if #available(iOS 11.0, *), let cluster = annotation as? MKClusterAnnotation {
+            self.zoomToCluster(cluster, animated: true)
+            let clusterToDeselect = cluster
+            DispatchQueue.main.async { [weak self] in
+                self?.mapView.deselectAnnotation(clusterToDeselect, animated: false)
+            }
+            return
+        }
         if annotation is MKUserLocation || annotation is FlutterAnnotation {
             return
         }
@@ -157,6 +176,9 @@ extension AppleMapController: AnnotationDelegate {
             }
             return nil
         }
+        if #available(iOS 11.0, *), let cluster = annotation as? MKClusterAnnotation {
+            return self.getClusterMarkerAnnotationView(cluster: cluster)
+        }
         // Let MapKit provide its default rendering for selectable POI features
         // (`MKMapFeatureAnnotation`, iOS 17+) - we only customise FlutterAnnotation views.
         if #available(iOS 17.0, *), annotation is MKMapFeatureAnnotation {
@@ -225,6 +247,7 @@ extension AppleMapController: AnnotationDelegate {
             annotationView!.canShowCallout = false
             annotationView!.alpha = CGFloat(0.0)
             annotationView!.isDraggable = false
+            self.configureClustering(for: annotationView!, annotation: annotation)
             return annotationView! as! FlutterAnnotationView
         }
         if annotation.icon.iconType != .MARKER {
@@ -238,8 +261,61 @@ extension AppleMapController: AnnotationDelegate {
         annotationView!.canShowCallout = true
         annotationView!.alpha = CGFloat(annotation.alpha ?? 1.00)
         annotationView!.isDraggable = annotation.isDraggable ?? false
+        self.configureClustering(for: annotationView!, annotation: annotation)
 
         return annotationView!
+    }
+
+    @available(iOS 11.0, *)
+    private func getClusterMarkerAnnotationView(cluster: MKClusterAnnotation) -> ClusterMarkerAnnotationView {
+        self.mapView.register(
+            ClusterMarkerAnnotationView.self,
+            forAnnotationViewWithReuseIdentifier: ClusterMarkerAnnotationView.reuseId
+        )
+        let annotationView = self.mapView.dequeueReusableAnnotationView(
+            withIdentifier: ClusterMarkerAnnotationView.reuseId,
+            for: cluster
+        ) as! ClusterMarkerAnnotationView
+        annotationView.annotation = cluster
+        annotationView.configureIfNeeded()
+        annotationView.canShowCallout = false
+        return annotationView
+    }
+
+    private func configureClustering(for view: MKAnnotationView, annotation: FlutterAnnotation) {
+        guard #available(iOS 11.0, *) else { return }
+        guard self.mapView.clusteringEnabled else {
+            view.clusteringIdentifier = nil
+            return
+        }
+        if annotation.id == Self.userLocationMarkerId {
+            view.clusteringIdentifier = nil
+            return
+        }
+        view.clusteringIdentifier = Self.clusterIdentifier
+        view.collisionMode = .rectangle
+        view.displayPriority = .defaultHigh
+    }
+
+    @available(iOS 11.0, *)
+    private func zoomToCluster(_ cluster: MKClusterAnnotation, animated: Bool) {
+        let coordinates = cluster.memberAnnotations.map { $0.coordinate }
+        guard !coordinates.isEmpty else { return }
+
+        var mapRect = MKMapRect.null
+        for coordinate in coordinates {
+            let point = MKMapPoint(coordinate)
+            let rect = MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1)
+            mapRect = mapRect.isNull ? rect : mapRect.union(rect)
+        }
+
+        let padding = UIEdgeInsets(
+            top: Self.clusterZoomPadding,
+            left: Self.clusterZoomPadding,
+            bottom: Self.clusterZoomPadding,
+            right: Self.clusterZoomPadding
+        )
+        self.mapView.setVisibleMapRect(mapRect, edgePadding: padding, animated: animated)
     }
 
     func annotationsToAdd(annotations: NSArray) {
@@ -466,6 +542,7 @@ extension AppleMapController: AnnotationDelegate {
             pinAnnotationView = MKPinAnnotationView.init(annotation: annotation, reuseIdentifier: id)
         }
         pinAnnotationView.layer.zPosition = annotation.zIndex
+        self.configureClustering(for: pinAnnotationView, annotation: annotation)
 
         if let hueColor: Double = annotation.icon.hueColor {
             pinAnnotationView.pinTintColor = UIColor.init(hue: hueColor, saturation: 1, brightness: 1, alpha: 1)
@@ -483,6 +560,7 @@ extension AppleMapController: AnnotationDelegate {
         if let hueColor: Double = annotation.icon.hueColor {
             markerAnnotationView.markerTintColor = UIColor.init(hue: hueColor, saturation: 1, brightness: 1, alpha: 1)
         }
+        self.configureClustering(for: markerAnnotationView, annotation: annotation)
 
         return markerAnnotationView
     }
@@ -498,6 +576,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         annotationView.stickyZPosition = annotation.zIndex
         annotationView.canShowCallout = annotation.title != nil || annotation.subtitle != nil
+        self.configureClustering(for: annotationView, annotation: annotation)
         return annotationView
     }
 
@@ -512,6 +591,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         annotationView.stickyZPosition = annotation.zIndex
         annotationView.canShowCallout = annotation.title != nil || annotation.subtitle != nil
+        self.configureClustering(for: annotationView, annotation: annotation)
         return annotationView
     }
 
@@ -577,6 +657,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         annotationView.stickyZPosition = annotation.zIndex
         annotationView.canShowCallout = false
+        self.configureClustering(for: annotationView, annotation: annotation)
         return annotationView
     }
 
@@ -597,6 +678,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         annotationView.image = annotation.icon.image
         annotationView.stickyZPosition = annotation.zIndex
+        self.configureClustering(for: annotationView, annotation: annotation)
         return annotationView
     }
 

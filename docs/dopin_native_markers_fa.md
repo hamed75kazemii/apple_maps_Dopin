@@ -82,3 +82,22 @@ await DopinMarker.withAssetImage(
 ```
 
 نمونه: `consumer_sample/lib/main.dart`
+
+## کلاسترینگ نیتیو (iOS 11+)
+
+وقتی مارکرها در یک سطح زوم روی هم می‌افتند، MapKit آن‌ها را در یک **مارکر کلاستر** ادغام می‌کند (پیش‌نمایش چند آواتار چرخیده + متن `N+ more`). با زوم یا پَن، کلاستر با **fade** به مارکرهای تکی تبدیل می‌شود. لمس کلاستر نقشه را روی ناحیه اعضا زوم می‌کند.
+
+```dart
+AppleMap(
+  clusteringEnabled: true, // پیش‌فرض: true
+  annotations: markers,
+)
+```
+
+| رفتار | توضیح |
+|--------|--------|
+| انواع مارکر | `DopinMarker`، `SvgMarker`، `CardMarker`، bitmap و pin |
+| غیرفعال | `clusteringEnabled: false` |
+| لمس کلاستر | زوم خودکار (بدون `onTap` تک‌مارکر) |
+| مارکر موقعیت من | در کلاستر شرکت نمی‌کند |
+

@@ -40,6 +40,7 @@ class AppleMap extends StatefulWidget {
     this.mapType = MapType.standard,
     this.elevationStyle = ElevationStyle.flat,
     this.globeAtMinZoom = false,
+    this.clusteringEnabled = true,
     this.minMaxZoomPreference = MinMaxZoomPreference.unbounded,
     this.trackingMode = TrackingMode.none,
     this.rotateGesturesEnabled = true,
@@ -89,6 +90,10 @@ class AppleMap extends StatefulWidget {
   /// When true and [mapType] is [MapType.standard], zooming out to the minimum
   /// level switches to hybrid flyover so the 3D globe is shown (iOS only).
   final bool globeAtMinZoom;
+
+  /// When true (iOS 11+), overlapping markers are grouped into a native cluster
+  /// annotation with a custom stacked-avatar appearance.
+  final bool clusteringEnabled;
 
   /// The mode used to track the user location.
   final TrackingMode trackingMode;
@@ -404,6 +409,7 @@ class _AppleMapOptions {
     this.mapType,
     this.elevationStyle,
     this.globeAtMinZoom,
+    this.clusteringEnabled,
     this.minMaxZoomPreference,
     this.rotateGesturesEnabled,
     this.scrollGesturesEnabled,
@@ -426,6 +432,7 @@ class _AppleMapOptions {
       mapType: map.mapType,
       elevationStyle: map.elevationStyle,
       globeAtMinZoom: map.globeAtMinZoom,
+      clusteringEnabled: map.clusteringEnabled,
       minMaxZoomPreference: map.minMaxZoomPreference,
       rotateGesturesEnabled: map.rotateGesturesEnabled,
       scrollGesturesEnabled: map.scrollGesturesEnabled,
@@ -452,6 +459,8 @@ class _AppleMapOptions {
   final ElevationStyle? elevationStyle;
 
   final bool? globeAtMinZoom;
+
+  final bool? clusteringEnabled;
 
   final MinMaxZoomPreference? minMaxZoomPreference;
 
@@ -495,6 +504,7 @@ class _AppleMapOptions {
     addIfNonNull('mapType', mapType?.index);
     addIfNonNull('elevationStyle', elevationStyle?.index);
     addIfNonNull('globeAtMinZoom', globeAtMinZoom);
+    addIfNonNull('clusteringEnabled', clusteringEnabled);
     addIfNonNull('minMaxZoomPreference', minMaxZoomPreference?._toJson());
     addIfNonNull('rotateGesturesEnabled', rotateGesturesEnabled);
     addIfNonNull('scrollGesturesEnabled', scrollGesturesEnabled);

@@ -761,6 +761,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 extension AppleMapController: MKMapViewDelegate {
     // onIdle
     public func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        self.mapView.isMapRegionChanging = false
+        if !self.mapView.hasCompletedInitialMapLoad {
+            self.mapView.hasCompletedInitialMapLoad = true
+        }
         self.syncUserLocationMarkerIfAvailable()
         // While the native orbit is running we drive the camera every frame; emitting
         // camera#onMove/onIdle here would flood the Flutter channel and defeat the
@@ -781,7 +785,31 @@ extension AppleMapController: MKMapViewDelegate {
     // onMoveStarted
     public func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
         if self.isDrivingCamera { return }
+        self.mapView.isMapRegionChanging = true
         self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
+    }
+
+    @available(iOS 11.0, *)
+    public func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
+        guard self.mapView.clusteringEnabled else { return }
+
+        let shouldAnimate = self.mapView.hasCompletedInitialMapLoad
+            && (self.mapView.isMapRegionChanging || views.contains { $0 is ClusterMarkerAnnotationView })
+
+        guard shouldAnimate else { return }
+
+        let duration: TimeInterval = 0.25
+        for view in views {
+            let isClusterView = view is ClusterMarkerAnnotationView
+            let isFlutterMember = view.annotation is FlutterAnnotation
+            guard isClusterView || isFlutterMember else { continue }
+
+            let targetAlpha = view.alpha
+            view.alpha = 0
+            UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut, .beginFromCurrentState]) {
+                view.alpha = targetAlpha
+            }
+        }
     }
 
     public func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {

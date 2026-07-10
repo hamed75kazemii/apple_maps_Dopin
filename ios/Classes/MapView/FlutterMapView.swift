@@ -54,6 +54,15 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     /// Flutter [AppleMap.globeAtMinZoom]: auto standard ↔ hybrid flyover by zoom.
     var globeAtMinZoom: Bool = false
 
+    /// Flutter [AppleMap.clusteringEnabled]: native MapKit marker clustering.
+    var clusteringEnabled: Bool = true
+
+    /// True while the map region is changing (pan/zoom) — used for cluster fade-in.
+    var isMapRegionChanging: Bool = false
+
+    /// Set after the first camera idle so initial markers skip cluster fade.
+    var hasCompletedInitialMapLoad: Bool = false
+
     /// Map type index requested from Flutter ([MapType] enum).
     var userRequestedMapTypeIndex: Int = 0
 
@@ -206,6 +215,10 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             if !globeAtMinZoom {
                 isAutoGlobeActive = false
             }
+        }
+
+        if let clusteringEnabled: Bool = options["clusteringEnabled"] as? Bool {
+            self.clusteringEnabled = clusteringEnabled
         }
 
         if let elevationStyle: Int = options["elevationStyle"] as? Int {

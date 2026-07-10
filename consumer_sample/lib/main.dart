@@ -135,6 +135,38 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   static const double _focusOrbitDegreesPerSecond = 10;
   static const double _minFocusZoom = 17;
 
+  /// Dense markers around downtown LA to exercise native MapKit clustering.
+  static Set<Annotation> _clusterDemoAnnotations() {
+    const double baseLat = 34.0522;
+    const double baseLng = -118.2437;
+    final Set<Annotation> markers = <Annotation>{};
+    for (int index = 0; index < 16; index++) {
+      final int row = index ~/ 4;
+      final int col = index % 4;
+      final double lat = baseLat + (row - 1.5) * 0.00035;
+      final double lng = baseLng + (col - 1.5) * 0.00035;
+      markers.add(
+        Annotation(
+          annotationId: AnnotationId('cluster_demo_$index'),
+          position: LatLng(lat, lng),
+          onTap: () {},
+          shadow: _demoShadow,
+          dopinMarker: DopinMarker(
+            imageUrls: <String>[
+              'https://i.pravatar.cc/150?img=${index + 1}',
+            ],
+            width: 40,
+            height: 40,
+            borderWidth: 3,
+            borderColor: Colors.white,
+            borderRadius: 12,
+          ),
+        ),
+      );
+    }
+    return markers;
+  }
+
   bool get _isFocused => _focusedPoi != null;
 
   late final Set<Annotation> _annotations = <Annotation>{
@@ -172,7 +204,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     Annotation(
       annotationId: const AnnotationId('marker_multi_image_event'),
       position: const LatLng(34.057, -118.247),
-      anchor: const Offset(0.5, 1.0),
       onTap: () => _onMarkerTap('marker_event'),
       // glow: true,
       shadow: _demoShadow,
@@ -190,7 +221,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     Annotation(
       annotationId: const AnnotationId('marker_multi_image_event2'),
       position: const LatLng(34.057, -118.248),
-      anchor: const Offset(0.5, 1.0),
       onTap: () => _onMarkerTap('marker_event'),
       // glow: true,
       shadow: _demoShadow,
@@ -208,30 +238,35 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     Annotation(
       annotationId: const AnnotationId('marker_event'),
       position: const LatLng(34.054, -118.245),
-      anchor: const Offset(0.5, 1.0),
       onTap: () => _onMarkerTap('marker_event'),
-      // glow: true,
       shadow: _demoShadow,
-      svgMarker: const SvgMarker(
-        //    imageUrl: 'https://i.prafggvatar.cc/150?img=8',
-        emoji: '🎉',
+      dopinMarker: const DopinMarker(
+        imageUrls: <String>['https://i.pravatar.cc/150?img=8'],
+        width: 46,
+        height: 46,
+        borderWidth: 3,
+        borderColor: Colors.white,
+        borderRadius: 12,
+        labelColor: _labelColor,
       ),
     ),
     Annotation(
       annotationId: const AnnotationId('marker_card'),
       position: const LatLng(34.050, -118.250),
-      // The card tail points down at the position.
-      anchor: const Offset(0.5, 1.0),
       onTap: () => _onMarkerTap('marker_card'),
       shadow: _demoShadow,
-      cardMarker: const CardMarker(
-        title: 'Startbuck Market',
-        subtitle: 'Restaurant',
-        // Distance is a free-form string; unit is decided here in Flutter.
-        distance: '2.1 m',
-        imageUrl: 'https://i.pravatar.cc/150?img=15',
+      dopinMarker: const DopinMarker(
+        imageUrls: <String>['https://i.pravatar.cc/150?img=15'],
+        label: 'Starbucks',
+        width: 46,
+        height: 46,
+        borderWidth: 3,
+        borderColor: Colors.white,
+        borderRadius: 12,
+        labelColor: _labelColor,
       ),
     ),
+    ..._clusterDemoAnnotations(),
   };
 
   @override
@@ -486,6 +521,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
               initialCameraPosition: _losAngeles,
               mapType: MapType.standard,
               elevationStyle: ElevationStyle.realistic,
+              clusteringEnabled: true,
 
               //  showPointsOfInterest: false,
               globeAtMinZoom: true,
