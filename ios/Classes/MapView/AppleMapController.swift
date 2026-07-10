@@ -199,7 +199,11 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     break
                 case "map#update":
                     let options = args["options"] as! Dictionary<String, Any>
+                    let clusteringChanged = options["clusteringEnabled"] != nil
                     self.mapView.interpretOptions(options: options)
+                    if clusteringChanged {
+                        self.reconfigureClusteringForAllAnnotations()
+                    }
                     self.applyMyLocationMarker(from: options)
                     break
                 case "camera#animate":

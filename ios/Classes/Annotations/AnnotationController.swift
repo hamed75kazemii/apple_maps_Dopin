@@ -517,7 +517,17 @@ extension AppleMapController: AnnotationDelegate {
                     let newAnnotationView = getAnnotationView(annotation: annotation)
                     view.image = newAnnotationView.image
                 }
+                self.configureClustering(for: view, annotation: annotation)
             }
+        }
+    }
+
+    func reconfigureClusteringForAllAnnotations() {
+        guard #available(iOS 11.0, *) else { return }
+        for annotation in self.mapView.annotations {
+            guard let flutterAnnotation = annotation as? FlutterAnnotation else { continue }
+            guard let view = self.mapView.view(for: flutterAnnotation) else { continue }
+            self.configureClustering(for: view, annotation: flutterAnnotation)
         }
     }
 
