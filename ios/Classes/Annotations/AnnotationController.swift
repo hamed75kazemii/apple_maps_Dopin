@@ -284,14 +284,19 @@ extension AppleMapController: AnnotationDelegate {
 
     private func configureClustering(for view: MKAnnotationView, annotation: FlutterAnnotation) {
         guard #available(iOS 11.0, *) else { return }
+
+        if annotation.id == Self.userLocationMarkerId {
+            view.clusteringIdentifier = nil
+            view.collisionMode = .none
+            view.displayPriority = .required
+            return
+        }
+
         guard self.mapView.clusteringEnabled else {
             view.clusteringIdentifier = nil
             return
         }
-        if annotation.id == Self.userLocationMarkerId {
-            view.clusteringIdentifier = nil
-            return
-        }
+
         view.clusteringIdentifier = Self.clusterIdentifier
         view.collisionMode = .rectangle
         view.displayPriority = .defaultHigh
