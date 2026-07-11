@@ -53,17 +53,24 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   static const Duration _focusFlyDuration = Duration(milliseconds: 420);
 
+  static const LatLng _multiDopinDemoCenter = LatLng(34.0530, -118.2420);
+
   static const CameraPosition _losAngeles = CameraPosition(
-    target: LatLng(34.0522, -118.2437),
-    zoom: 12,
+    target: _multiDopinDemoCenter,
+    zoom: 16,
     pitch: 60,
   );
 
   static const List<String> _demoGroupUrls = <String>[
-    'https://i.pravatar.cklk;c/150?img=1',
+    'https://i.pravatar.cc/150?img=1',
     'https://i.pravatar.cc/150?img=2',
     'https://i.pravatar.cc/150?img=3',
     'https://i.pravatar.cc/150?img=4',
+  ];
+  static const List<String> _demoFiveUrls = <String>[
+    'https://i.pravatar.cc/150?img=5',
+    'https://i.pravatar.cc/150?img=6',
+    'https://i.pravatar.cc/150?img=7',
   ];
   static const List<String> _demoDualUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
@@ -120,7 +127,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   static const DopinMarker _quadImageMarker = DopinMarker(
     imageUrls: _demoGroupUrls,
-    // label: '4',
     width: 46,
     height: 46,
     borderWidth: 3,
@@ -128,6 +134,53 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     borderRadius: 12,
     labelColor: _labelColor,
   );
+
+  static const DopinMarker _fiveDopinMarker = DopinMarker(
+    imageUrls: _demoFiveUrls,
+    count: 5,
+    width: 46,
+    height: 46,
+    borderWidth: 3,
+    borderColor: Colors.white,
+    borderRadius: 12,
+    labelColor: _labelColor,
+  );
+
+  /// 2–5 Dopin در یک لوکیشن — چهار نمونه کنار هم برای مقایسه stack.
+  static Set<Annotation> _multiDopinLocationDemos() {
+    const LatLng center = _multiDopinDemoCenter;
+    const double d = 0.00008;
+    return <Annotation>{
+      Annotation(
+        annotationId: const AnnotationId('multi_dopin_2'),
+        position: center,
+        onTap: () {},
+        shadow: _demoShadow,
+        dopinMarker: _dualImageMarker,
+      ),
+      Annotation(
+        annotationId: const AnnotationId('multi_dopin_3'),
+        position: LatLng(center.latitude, center.longitude + d),
+        onTap: () {},
+        shadow: _demoShadow,
+        dopinMarker: _tripleImageMarker,
+      ),
+      Annotation(
+        annotationId: const AnnotationId('multi_dopin_4'),
+        position: LatLng(center.latitude + d, center.longitude),
+        onTap: () {},
+        shadow: _demoShadow,
+        dopinMarker: _quadImageMarker,
+      ),
+      Annotation(
+        annotationId: const AnnotationId('multi_dopin_5'),
+        position: LatLng(center.latitude + d, center.longitude + d),
+        onTap: () {},
+        shadow: _demoShadow,
+        dopinMarker: _fiveDopinMarker,
+      ),
+    };
+  }
 
   static const double _focusPitchMin = 50;
   static const double _focusPitchMax = 60;
@@ -170,37 +223,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   bool get _isFocused => _focusedPoi != null;
 
   late final Set<Annotation> _annotations = <Annotation>{
-    // Annotation(
-    //   annotationId: const AnnotationId('marker_single'),
-    //   position: const LatLng(34.0522, -118.2437),
-    //   onTap: () => _onMarkerTap('marker_single'),
-    //   shadow: _demoShadow,
-    //   dopinMarker: _singleImageMarker,
-    //   glow: true,
-    //   // Avatar center: x = 46/2, y = 46/2 inside total height 46 + 18 - 8 = 56.
-    //   glowAnchor: const Offset(0.5, 23 / 56),
-    // ),
-    Annotation(
-      annotationId: const AnnotationId('marker_dual'),
-      position: const LatLng(34.056, -118.2437),
-      onTap: () => _onMarkerTap('marker_dual'),
-      shadow: _demoShadow,
-      dopinMarker: _dualImageMarker,
-    ),
-    Annotation(
-      annotationId: const AnnotationId('marker_triple'),
-      position: const LatLng(34.0522, -118.238),
-      onTap: () => _onMarkerTap('marker_triple'),
-      shadow: _demoShadow,
-      dopinMarker: _tripleImageMarker,
-    ),
-    Annotation(
-      annotationId: const AnnotationId('marker_quad'),
-      position: const LatLng(34.048, -118.2437),
-      onTap: () => _onMarkerTap('marker_quad'),
-      shadow: _demoShadow,
-      dopinMarker: _quadImageMarker,
-    ),
+    ..._multiDopinLocationDemos(),
     Annotation(
       annotationId: const AnnotationId('marker_multi_image_event'),
       position: const LatLng(34.057, -118.247),

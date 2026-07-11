@@ -517,8 +517,9 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         let imageViews = Self.findImageViews(in: content)
         let urlCount = min(annotation.dopinImageUrls.count, 4)
 
-        if urlCount > 1 {
-            for index in 0..<urlCount {
+        if urlCount >= 2 {
+            let previewSlots = min(3, urlCount)
+            for index in 0..<previewSlots {
                 guard index < imageViews.count else { break }
                 let url = annotation.dopinImageUrls[index]
                 let imageView = imageViews[index]
@@ -561,7 +562,8 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         frameView: UIView,
         frameW: CGFloat,
         frameH: CGFloat,
-        annotation: FlutterAnnotation
+        annotation: FlutterAnnotation,
+        suppressCountBadge: Bool = false
     ) -> UIView {
         let labelText = annotation.dopinMarkerLabel ?? ""
         let hasLabel = !labelText.isEmpty
@@ -591,7 +593,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
             container.addSubview(badge)
         }
 
-        if let count = annotation.dopinMarkerCount, count > 0 {
+        if !suppressCountBadge, let count = annotation.dopinMarkerCount, count > 0 {
             addCountBadge(to: container, frameW: frameW, frameH: frameH, count: count)
         }
 
@@ -692,7 +694,25 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         if imageCount <= 1 {
             return buildSingleImageMarker(annotation: annotation)
         }
-        return buildMultiImageMarker(annotation: annotation, imageCount: imageCount)
+
+        var memberCount = imageCount
+        if let count = annotation.dopinMarkerCount, count > memberCount {
+            memberCount = count
+        }
+
+        let previewSlots = min(3, imageCount)
+        let stackContent = ClusterStackMarkerBuilder.buildContent(
+            memberCount: memberCount,
+            previewSlots: previewSlots,
+            imageTagBase: imageTagBase
+        )
+        return wrapMarkerWithBadge(
+            frameView: stackContent,
+            frameW: ClusterStackMarkerBuilder.totalWidth,
+            frameH: stackContent.bounds.height,
+            annotation: annotation,
+            suppressCountBadge: memberCount > previewSlots
+        )
     }
 
     private static func buildSingleImageMarker(annotation: FlutterAnnotation) -> UIView {
@@ -715,86 +735,6 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         let avatar = imageView(side: avatarSide, cornerRadius: innerRadius, tag: imageTagBase)
         avatarWrap.addSubview(avatar)
         frameView.addSubview(avatarWrap)
-
-        return wrapMarkerWithBadge(frameView: frameView, frameW: frameW, frameH: frameH, annotation: annotation)
-    }
-
-    private static func buildMultiImageMarker(annotation: FlutterAnnotation, imageCount: Int) -> UIView {
-        let baseW = annotation.dopinFrameWidth
-        let baseH = annotation.dopinFrameHeight
-        let padding: CGFloat = 4
-        let gap: CGFloat = 3
-
-        let frameW = baseW
-        let frameH: CGFloat
-        let outerRadius: CGFloat
-
-        switch imageCount {
-        case 2:
-            frameH = baseH / 2
-            outerRadius = frameH / 2
-        default:
-            frameH = baseH
-            outerRadius = annotation.dopinBorderRadius ?? min(baseW, baseH) / 2
-        }
-
-        let innerW = max(0, frameW - padding * 2)
-        let innerH = max(0, frameH - padding * 2)
-
-        let cell: CGFloat
-        var placements: [(origin: CGPoint, index: Int)] = []
-
-        switch imageCount {
-        case 2:
-            let dualPadding: CGFloat = 3
-            let dualInnerW = max(0, frameW - dualPadding * 2)
-            let dualInnerH = max(0, frameH - dualPadding * 2)
-            let maxDualCell = min((dualInnerW - gap) / 2, dualInnerH)
-            cell = min(maxDualCell + 2, dualInnerH, (dualInnerW - gap) / 2)
-            let rowW = cell * 2 + gap
-            let startX = dualPadding + (dualInnerW - rowW) / 2
-            let startY = dualPadding + (dualInnerH - cell) / 2
-            placements = [
-                (CGPoint(x: startX, y: startY), 0),
-                (CGPoint(x: startX + cell + gap, y: startY), 1),
-            ]
-        case 3:
-            cell = min((innerW - gap) / 2, (innerH - gap) / 2)
-            let gridW = cell * 2 + gap
-            let gridH = cell * 2 + gap
-            let startX = padding + (innerW - gridW) / 2
-            let startY = padding + (innerH - gridH) / 2
-            placements = [
-                (CGPoint(x: startX, y: startY), 0),
-                (CGPoint(x: startX + cell + gap, y: startY), 1),
-                (CGPoint(x: startX + (cell + gap) / 2, y: startY + cell + gap), 2),
-            ]
-        default:
-            cell = min((innerW - gap) / 2, (innerH - gap) / 2)
-            let gridW = cell * 2 + gap
-            let gridH = cell * 2 + gap
-            let startX = padding + (innerW - gridW) / 2
-            let startY = padding + (innerH - gridH) / 2
-            placements = [
-                (CGPoint(x: startX, y: startY), 0),
-                (CGPoint(x: startX + cell + gap, y: startY), 1),
-                (CGPoint(x: startX, y: startY + cell + gap), 2),
-                (CGPoint(x: startX + cell + gap, y: startY + cell + gap), 3),
-            ]
-        }
-
-        let imageCorner = cell * 0.28
-
-        let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
-        frameView.backgroundColor = annotation.dopinBorderColor
-        frameView.layer.cornerRadius = outerRadius
-        frameView.clipsToBounds = true
-
-        for placement in placements {
-            let iv = imageView(side: cell, cornerRadius: imageCorner, tag: imageTagBase + placement.index)
-            iv.frame.origin = placement.origin
-            frameView.addSubview(iv)
-        }
 
         return wrapMarkerWithBadge(frameView: frameView, frameW: frameW, frameH: frameH, annotation: annotation)
     }
@@ -1479,6 +1419,171 @@ final class CardMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 }
 
+// MARK: - Cluster stack layout (shared by map clusters and multi-dopin markers)
+
+/// Draws label text with a white outline and solid dark fill on top.
+private final class ClusterOutlinedLabel: UILabel {
+
+    var outlineColor: UIColor = .white
+    var outlineWidth: CGFloat = 3
+    var fillColor: UIColor = UIColor(red: 19 / 255, green: 19 / 255, blue: 19 / 255, alpha: 1)
+
+    override func drawText(in rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext(), let text = text, let font = font else {
+            super.drawText(in: rect)
+            return
+        }
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = textAlignment
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraph,
+        ]
+
+        context.setLineJoin(.round)
+        context.setLineWidth(outlineWidth)
+
+        context.setTextDrawingMode(.stroke)
+        (text as NSString).draw(in: rect, withAttributes: attributes.merging([
+            .foregroundColor: outlineColor,
+        ]) { _, new in new })
+
+        context.setTextDrawingMode(.fill)
+        (text as NSString).draw(in: rect, withAttributes: attributes.merging([
+            .foregroundColor: fillColor,
+        ]) { _, new in new })
+    }
+}
+
+enum ClusterStackMarkerBuilder {
+
+    struct AvatarPlacement {
+        let side: CGFloat
+        let cornerRadius: CGFloat
+        let rotationDegrees: CGFloat
+        let center: CGPoint
+    }
+
+    static let stackHeight: CGFloat = 52
+    static let totalWidth: CGFloat = 76
+
+    private static let avatarPlacements: [AvatarPlacement] = [
+        AvatarPlacement(side: 33.187, cornerRadius: 10, rotationDegrees: -8.1, center: CGPoint(x: 30, y: 30)),
+        AvatarPlacement(side: 40, cornerRadius: 12, rotationDegrees: 10.88, center: CGPoint(x: 48, y: 34)),
+        AvatarPlacement(side: 28.053, cornerRadius: 8, rotationDegrees: 2.75, center: CGPoint(x: 38, y: 16)),
+    ]
+
+    static func moreLabelText(memberCount: Int, previewCount: Int) -> String? {
+        let remaining = max(0, memberCount - previewCount)
+        guard remaining > 0 else { return nil }
+        if remaining >= 5 {
+            return "\(remaining)+ more"
+        }
+        return remaining == 1 ? "1 more" : "\(remaining) more"
+    }
+
+    static func buildContent(memberCount: Int, previewSlots: Int, imageTagBase: Int) -> UIView {
+        let labelFontSize: CGFloat = 12
+        let labelSpacing: CGFloat = 6
+        let labelText = moreLabelText(memberCount: memberCount, previewCount: previewSlots)
+        let hasLabel = labelText != nil
+
+        let labelHeight: CGFloat = hasLabel ? ceil(labelFontSize * 1.7) : 0
+        let totalHeight = stackHeight + (hasLabel ? labelSpacing + labelHeight : 0)
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
+        container.clipsToBounds = false
+        container.backgroundColor = .clear
+
+        let stackView = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: stackHeight))
+        stackView.clipsToBounds = false
+        container.addSubview(stackView)
+
+        let placements = avatarPlacements(for: previewSlots)
+        for (index, placement) in placements.enumerated() {
+            let avatar = makeRotatedAvatar(placement: placement, imageTag: imageTagBase + index)
+            stackView.addSubview(avatar)
+        }
+
+        if let labelText = labelText {
+            let labelY = stackHeight + labelSpacing
+            let label = makeOutlinedLabel(
+                text: labelText,
+                fontSize: labelFontSize,
+                frame: CGRect(x: 0, y: labelY, width: totalWidth, height: labelHeight)
+            )
+            container.addSubview(label)
+        }
+
+        container.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: totalHeight))
+        return container
+    }
+
+    private static func avatarPlacements(for count: Int) -> [AvatarPlacement] {
+        switch count {
+        case 2:
+            return Array(avatarPlacements.prefix(2))
+        default:
+            return Array(avatarPlacements.prefix(min(3, count)))
+        }
+    }
+
+    private static func makeOutlinedLabel(text: String, fontSize: CGFloat, frame: CGRect) -> UILabel {
+        let font: UIFont
+        if let rounded = UIFont(name: "SFProRounded-Semibold", size: fontSize) {
+            font = rounded
+        } else {
+            font = .systemFont(ofSize: fontSize, weight: .semibold)
+        }
+
+        let label = ClusterOutlinedLabel(frame: frame)
+        label.textAlignment = .center
+        label.backgroundColor = .clear
+        label.numberOfLines = 1
+        label.font = font
+        label.text = text
+        label.fillColor = UIColor(red: 19 / 255, green: 19 / 255, blue: 19 / 255, alpha: 1)
+        label.outlineColor = .white
+        label.outlineWidth = 3
+        return label
+    }
+
+    private static func makeRotatedAvatar(placement: AvatarPlacement, imageTag: Int) -> UIView {
+        let borderWidth: CGFloat = 3
+        let side = placement.side
+        let outer = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        outer.backgroundColor = .white
+        outer.layer.cornerRadius = placement.cornerRadius
+        outer.clipsToBounds = false
+        outer.layer.shadowColor = UIColor.black.cgColor
+        outer.layer.shadowOpacity = 0.14
+        outer.layer.shadowRadius = 8.95
+        outer.layer.shadowOffset = CGSize(width: 0, height: 4)
+        outer.layer.masksToBounds = false
+
+        let innerSide = max(0, side - borderWidth * 2)
+        let innerRadius = max(0, placement.cornerRadius - borderWidth)
+        let imageView = UIImageView(frame: CGRect(x: borderWidth, y: borderWidth, width: innerSide, height: innerSide))
+        imageView.tag = imageTag
+        imageView.contentMode = .scaleAspectFill
+        imageView.backgroundColor = UIColor(white: 0.92, alpha: 1)
+        imageView.layer.cornerRadius = innerRadius
+        imageView.clipsToBounds = true
+        outer.addSubview(imageView)
+
+        let wrapper = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        wrapper.backgroundColor = .clear
+        wrapper.clipsToBounds = false
+        wrapper.addSubview(outer)
+        outer.center = CGPoint(x: side / 2, y: side / 2)
+        wrapper.center = placement.center
+        wrapper.transform = CGAffineTransform(rotationAngle: placement.rotationDegrees * .pi / 180)
+        return wrapper
+    }
+}
+
 // MARK: - Cluster markers
 
 enum ClusterMemberPreviewResolver {
@@ -1547,15 +1652,6 @@ enum ClusterMemberPreviewResolver {
         }
         DopinMarkerImageLoader.load(urlString: annotation.cardImageUrl, completion: completion)
     }
-
-    static func moreLabelText(memberCount: Int, previewCount: Int) -> String? {
-        let remaining = max(0, memberCount - previewCount)
-        guard remaining > 0 else { return nil }
-        if remaining >= 5 {
-            return "\(remaining)+ more"
-        }
-        return remaining == 1 ? "1 more" : "\(remaining) more"
-    }
 }
 
 @available(iOS 11.0, *)
@@ -1565,19 +1661,6 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
 
     private static let contentTag = 8_445_001
     private static let imageTagBase = 8_445_010
-
-    private struct AvatarPlacement {
-        let side: CGFloat
-        let cornerRadius: CGFloat
-        let rotationDegrees: CGFloat
-        let center: CGPoint
-    }
-
-    private static let avatarPlacements: [AvatarPlacement] = [
-        AvatarPlacement(side: 33.187, cornerRadius: 10, rotationDegrees: -8.1, center: CGPoint(x: 30, y: 30)),
-        AvatarPlacement(side: 40, cornerRadius: 12, rotationDegrees: 10.88, center: CGPoint(x: 48, y: 34)),
-        AvatarPlacement(side: 28.053, cornerRadius: 8, rotationDegrees: 2.75, center: CGPoint(x: 38, y: 16)),
-    ]
 
     private var configuredSignature: String?
     private var imageLoadToken: String?
@@ -1626,9 +1709,10 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
 
         let memberCount = cluster.memberAnnotations.count
         let previewSlots = min(3, memberCount)
-        let content = Self.buildClusterContent(
+        let content = ClusterStackMarkerBuilder.buildContent(
             memberCount: memberCount,
-            previewSlots: previewSlots
+            previewSlots: previewSlots,
+            imageTagBase: Self.imageTagBase
         )
         content.tag = Self.contentTag
         addSubview(content)
@@ -1655,136 +1739,5 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
                 DopinMarkerImageLoader.applyProfileImage(image, to: imageView)
             }
         }
-    }
-
-    private static func buildClusterContent(memberCount: Int, previewSlots: Int) -> UIView {
-        let stackHeight: CGFloat = 52
-        let labelFontSize: CGFloat = 12
-        let labelSpacing: CGFloat = 6
-        let labelText = ClusterMemberPreviewResolver.moreLabelText(
-            memberCount: memberCount,
-            previewCount: previewSlots
-        )
-        let hasLabel = labelText != nil
-
-        let labelHeight: CGFloat = hasLabel ? ceil(labelFontSize * 1.7) : 0
-        let totalHeight = stackHeight + (hasLabel ? labelSpacing + labelHeight : 0)
-        let totalWidth: CGFloat = 76
-
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
-        container.clipsToBounds = false
-        container.backgroundColor = .clear
-
-        let stackView = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: stackHeight))
-        stackView.clipsToBounds = false
-        container.addSubview(stackView)
-
-        for index in 0..<previewSlots {
-            let placement = avatarPlacements[index]
-            let avatar = makeRotatedAvatar(placement: placement, imageTag: imageTagBase + index)
-            stackView.addSubview(avatar)
-        }
-
-        if let labelText = labelText {
-            let labelY = stackHeight + labelSpacing
-            let label = makeClusterLabel(
-                text: labelText,
-                fontSize: labelFontSize,
-                frame: CGRect(x: 0, y: labelY, width: totalWidth, height: labelHeight)
-            )
-            container.addSubview(label)
-        }
-
-        container.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: totalHeight))
-        return container
-    }
-
-    private static func makeClusterLabel(text: String, fontSize: CGFloat, frame: CGRect) -> UILabel {
-        let font: UIFont
-        if let rounded = UIFont(name: "SFProRounded-Semibold", size: fontSize) {
-            font = rounded
-        } else {
-            font = .systemFont(ofSize: fontSize, weight: .semibold)
-        }
-
-        let label = ClusterOutlinedLabel(frame: frame)
-        label.textAlignment = .center
-        label.backgroundColor = .clear
-        label.numberOfLines = 1
-        label.font = font
-        label.text = text
-        label.fillColor = UIColor(red: 19 / 255, green: 19 / 255, blue: 19 / 255, alpha: 1)
-        label.outlineColor = .white
-        label.outlineWidth = 3
-        return label
-    }
-
-    private static func makeRotatedAvatar(placement: AvatarPlacement, imageTag: Int) -> UIView {
-        let borderWidth: CGFloat = 3
-        let side = placement.side
-        let outer = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
-        outer.backgroundColor = .white
-        outer.layer.cornerRadius = placement.cornerRadius
-        outer.clipsToBounds = false
-        outer.layer.shadowColor = UIColor.black.cgColor
-        outer.layer.shadowOpacity = 0.14
-        outer.layer.shadowRadius = 8.95
-        outer.layer.shadowOffset = CGSize(width: 0, height: 4)
-        outer.layer.masksToBounds = false
-
-        let innerSide = max(0, side - borderWidth * 2)
-        let innerRadius = max(0, placement.cornerRadius - borderWidth)
-        let imageView = UIImageView(frame: CGRect(x: borderWidth, y: borderWidth, width: innerSide, height: innerSide))
-        imageView.tag = imageTag
-        imageView.contentMode = .scaleAspectFill
-        imageView.backgroundColor = UIColor(white: 0.92, alpha: 1)
-        imageView.layer.cornerRadius = innerRadius
-        imageView.clipsToBounds = true
-        outer.addSubview(imageView)
-
-        let wrapper = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
-        wrapper.backgroundColor = .clear
-        wrapper.clipsToBounds = false
-        wrapper.addSubview(outer)
-        outer.center = CGPoint(x: side / 2, y: side / 2)
-        wrapper.center = placement.center
-        wrapper.transform = CGAffineTransform(rotationAngle: placement.rotationDegrees * .pi / 180)
-        return wrapper
-    }
-}
-
-/// Draws cluster label text with a white outline and solid dark fill on top.
-private final class ClusterOutlinedLabel: UILabel {
-
-    var outlineColor: UIColor = .white
-    var outlineWidth: CGFloat = 3
-    var fillColor: UIColor = UIColor(red: 19 / 255, green: 19 / 255, blue: 19 / 255, alpha: 1)
-
-    override func drawText(in rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext(), let text = text, let font = font else {
-            super.drawText(in: rect)
-            return
-        }
-
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = textAlignment
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .paragraphStyle: paragraph,
-        ]
-
-        context.setLineJoin(.round)
-        context.setLineWidth(outlineWidth)
-
-        context.setTextDrawingMode(.stroke)
-        (text as NSString).draw(in: rect, withAttributes: attributes.merging([
-            .foregroundColor: outlineColor,
-        ]) { _, new in new })
-
-        context.setTextDrawingMode(.fill)
-        (text as NSString).draw(in: rect, withAttributes: attributes.merging([
-            .foregroundColor: fillColor,
-        ]) { _, new in new })
     }
 }

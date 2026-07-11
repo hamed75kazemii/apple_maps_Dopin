@@ -106,8 +106,8 @@ class DopinMarker {
     );
   }
 
-  /// Remote image URLs (max 4). Layout: 1 = single, 2 = pill row,
-  /// 3 = triangle, 4 = 2×2 grid.
+  /// Remote image URLs (max 4). Layout for 2–4+ at one location matches the native
+  /// cluster stack (rotated avatars; 4+ shows three previews plus a count label).
   final List<String>? imageUrls;
   final Uint8List? imagePng;
   final List<dynamic>? imageFromAsset;
