@@ -1551,18 +1551,18 @@ enum ClusterStackMarkerBuilder {
     static let totalWidth: CGFloat = 76
 
     private static let avatarPlacements: [AvatarPlacement] = [
-        AvatarPlacement(side: 33.187, cornerRadius: 10, rotationDegrees: -8.1, center: CGPoint(x: 30, y: 30)),
+        AvatarPlacement(side: 40, cornerRadius: 12, rotationDegrees: -8.1, center: CGPoint(x: 22, y: 34)),
         AvatarPlacement(side: 40, cornerRadius: 12, rotationDegrees: 10.88, center: CGPoint(x: 48, y: 34)),
-        AvatarPlacement(side: 28.053, cornerRadius: 8, rotationDegrees: 2.75, center: CGPoint(x: 38, y: 16)),
+        AvatarPlacement(side: 28.053, cornerRadius: 8, rotationDegrees: 2.75, center: CGPoint(x: 32, y: 16)),
     ]
 
     static func moreLabelText(memberCount: Int, previewCount: Int) -> String? {
         let remaining = max(0, memberCount - previewCount)
         guard remaining > 0 else { return nil }
-        if remaining >= 5 {
-            return "\(remaining)+ more"
+        if remaining > 9 {
+            return "9+ more"
         }
-        return remaining == 1 ? "1 more" : "\(remaining) more"
+        return "\(remaining) more"
     }
 
     static func buildContent(memberCount: Int, previewSlots: Int, imageTagBase: Int) -> UIView {
@@ -1669,9 +1669,52 @@ enum ClusterStackMarkerBuilder {
 
 enum ClusterMemberPreviewResolver {
 
-    static func signature(for members: [FlutterAnnotation], totalCount: Int) -> String {
-        let previews = members.prefix(3).map { memberSignature($0) }.joined(separator: "|")
-        return "\(totalCount)|\(previews)"
+    struct PreviewImageRef {
+        let member: FlutterAnnotation
+        let urlIndex: Int
+    }
+
+    /// Logical image count for labels (matches multi-dopin marker semantics).
+    static func imageCount(for annotation: FlutterAnnotation) -> Int {
+        if annotation.usesDopinMarker {
+            let urlCount = min(annotation.dopinImageUrls.count, 4)
+            let hasFallbackImage = annotation.dopinImagePngData != nil
+                || annotation.dopinImageAssetName != nil
+            var count = urlCount > 0 ? urlCount : (hasFallbackImage ? 1 : 1)
+            if let markerCount = annotation.dopinMarkerCount, markerCount > count {
+                count = markerCount
+            }
+            return count
+        }
+        return 1
+    }
+
+    static func totalImageCount(for members: [FlutterAnnotation]) -> Int {
+        members.reduce(0) { $0 + imageCount(for: $1) }
+    }
+
+    /// First [limit] images across cluster members, in member order.
+    static func flattenedPreviewRefs(
+        for members: [FlutterAnnotation],
+        limit: Int = 3
+    ) -> [PreviewImageRef] {
+        var refs: [PreviewImageRef] = []
+        for member in members {
+            let logicalCount = imageCount(for: member)
+            for index in 0..<logicalCount {
+                if refs.count >= limit { return refs }
+                refs.append(PreviewImageRef(member: member, urlIndex: index))
+            }
+        }
+        return refs
+    }
+
+    static func signature(for members: [FlutterAnnotation]) -> String {
+        let totalImages = totalImageCount(for: members)
+        let previewSig = flattenedPreviewRefs(for: members, limit: 3)
+            .map { "\($0.member.id ?? ""):\($0.urlIndex)" }
+            .joined(separator: ",")
+        return "\(totalImages)|\(previewSig)"
     }
 
     static func memberSignature(_ annotation: FlutterAnnotation) -> String {
@@ -1709,6 +1752,26 @@ enum ClusterMemberPreviewResolver {
             return
         }
         completion(DopinMarkerImageLoader.blankProfileImage)
+    }
+
+    static func loadClusterPreview(
+        _ ref: PreviewImageRef,
+        completion: @escaping (UIImage?) -> Void
+    ) {
+        let member = ref.member
+        if member.usesDopinMarker {
+            if !member.dopinImageUrls.isEmpty {
+                let index = min(ref.urlIndex, member.dopinImageUrls.count - 1)
+                DopinMarkerImageLoader.load(
+                    urlString: member.dopinImageUrls[index],
+                    completion: completion
+                )
+                return
+            }
+            DopinMarkerImageLoader.load(for: member, completion: completion)
+            return
+        }
+        loadPreview(for: member, completion: completion)
     }
 
     private static func loadCardPreview(
@@ -1778,20 +1841,21 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
         guard let cluster = annotation as? MKClusterAnnotation else { return }
 
         let members = cluster.memberAnnotations.compactMap { $0 as? FlutterAnnotation }
-        let sig = ClusterMemberPreviewResolver.signature(
-            for: members,
-            totalCount: cluster.memberAnnotations.count
-        )
+        let sig = ClusterMemberPreviewResolver.signature(for: members)
         if !force, sig == configuredSignature { return }
         configuredSignature = sig
 
         viewWithTag(Self.contentTag)?.removeFromSuperview()
         image = nil
 
-        let memberCount = cluster.memberAnnotations.count
-        let previewSlots = min(3, memberCount)
+        let totalImageCount = ClusterMemberPreviewResolver.totalImageCount(for: members)
+        let previewSlots = min(3, totalImageCount)
+        let previewRefs = ClusterMemberPreviewResolver.flattenedPreviewRefs(
+            for: members,
+            limit: previewSlots
+        )
         let content = ClusterStackMarkerBuilder.buildContent(
-            memberCount: memberCount,
+            memberCount: totalImageCount,
             previewSlots: previewSlots,
             imageTagBase: Self.imageTagBase
         )
@@ -1804,18 +1868,18 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
         content.frame = bounds
         centerOffset = CGPoint(x: 0, y: -size.height / 2)
 
-        loadPreviewImages(into: content, members: Array(members.prefix(previewSlots)))
+        loadPreviewImages(into: content, refs: previewRefs)
     }
 
-    private func loadPreviewImages(into content: UIView, members: [FlutterAnnotation]) {
+    private func loadPreviewImages(into content: UIView, refs: [ClusterMemberPreviewResolver.PreviewImageRef]) {
         let token = configuredSignature ?? UUID().uuidString
         imageLoadToken = token
 
-        for (index, member) in members.enumerated() {
+        for (index, ref) in refs.enumerated() {
             guard let imageView = content.viewWithTag(Self.imageTagBase + index) as? UIImageView else {
                 continue
             }
-            ClusterMemberPreviewResolver.loadPreview(for: member) { [weak self] image in
+            ClusterMemberPreviewResolver.loadClusterPreview(ref) { [weak self] image in
                 guard let self = self, self.imageLoadToken == token else { return }
                 DopinMarkerImageLoader.applyProfileImage(image, to: imageView)
             }

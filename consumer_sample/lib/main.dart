@@ -67,11 +67,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     'https://i.pravatar.cc/150?img=3',
     'https://i.pravatar.cc/150?img=4',
   ];
-  static const List<String> _demoFiveUrls = <String>[
-    'https://i.pravatar.cc/150?img=5',
-    'https://i.pravatar.cc/150?img=6',
-    'https://i.pravatar.cc/150?img=7',
-  ];
   static const List<String> _demoDualUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
     'https://i.pravatar.cc/150?img=2',
@@ -88,19 +83,15 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   ];
   static const MarkerShadow _demoShadow = MarkerShadow();
 
-  // static const DopinMarker _singleImageMarker = DopinMarker(
-  //   imageUrls: <String>['https://i.pravatar.kklcc/150?imhhgg=12'],
-  //   // count: 12,
-  //   // label: '1',
-  //   width: 46,
-  //   height: 46,
-  //   borderWidth: 3,
-  //   borderColor: Colors.white,
-  //   borderRadius: 12,
-  //   labelColor: _labelColor,
-  //   labelGradientColors: _labelGradientColors,
-  //   label: 'Me',
-  // );
+  static const DopinMarker _singleImageMarker = DopinMarker(
+    imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
+    width: 46,
+    height: 46,
+    borderWidth: 3,
+    borderColor: Colors.white,
+    borderRadius: 12,
+    labelColor: _labelColor,
+  );
 
   static const DopinMarker _dualImageMarker = DopinMarker(
     imageUrls: _demoDualUrls,
@@ -136,7 +127,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   );
 
   static const DopinMarker _fiveDopinMarker = DopinMarker(
-    imageUrls: _demoFiveUrls,
+    imageUrls: _demoGroupUrls,
     count: 5,
     width: 46,
     height: 46,
@@ -146,35 +137,48 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     labelColor: _labelColor,
   );
 
-  /// 2–5 Dopin در یک لوکیشن — چهار نمونه کنار هم برای مقایسه stack.
-  static Set<Annotation> _multiDopinLocationDemos() {
+  /// 1–5 Dopin stack layouts in a row for side-by-side comparison.
+  static Set<Annotation> _dopinStackCountDemos() {
     const LatLng center = _multiDopinDemoCenter;
-    const double d = 0.00008;
+    const double spacing = 0.0012;
+
+    LatLng slot(int index) => LatLng(
+          center.latitude,
+          center.longitude + (index - 2) * spacing,
+        );
+
     return <Annotation>{
       Annotation(
-        annotationId: const AnnotationId('multi_dopin_2'),
-        position: center,
+        annotationId: const AnnotationId('dopin_stack_1'),
+        position: slot(0),
+        onTap: () {},
+        shadow: _demoShadow,
+        dopinMarker: _singleImageMarker,
+      ),
+      Annotation(
+        annotationId: const AnnotationId('dopin_stack_2'),
+        position: slot(1),
         onTap: () {},
         shadow: _demoShadow,
         dopinMarker: _dualImageMarker,
       ),
       Annotation(
-        annotationId: const AnnotationId('multi_dopin_3'),
-        position: LatLng(center.latitude, center.longitude + d),
+        annotationId: const AnnotationId('dopin_stack_3'),
+        position: slot(2),
         onTap: () {},
         shadow: _demoShadow,
         dopinMarker: _tripleImageMarker,
       ),
       Annotation(
-        annotationId: const AnnotationId('multi_dopin_4'),
-        position: LatLng(center.latitude + d, center.longitude),
+        annotationId: const AnnotationId('dopin_stack_4'),
+        position: slot(3),
         onTap: () {},
         shadow: _demoShadow,
         dopinMarker: _quadImageMarker,
       ),
       Annotation(
-        annotationId: const AnnotationId('multi_dopin_5'),
-        position: LatLng(center.latitude + d, center.longitude + d),
+        annotationId: const AnnotationId('dopin_stack_5'),
+        position: slot(4),
         onTap: () {},
         shadow: _demoShadow,
         dopinMarker: _fiveDopinMarker,
@@ -222,141 +226,17 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   bool get _isFocused => _focusedPoi != null;
 
-  late Set<Annotation> _annotations = <Annotation>{};
-
-  static const Duration _scaleInDemoInitialDelay = Duration(seconds: 5);
-  static const Duration _scaleInDemoInterval = Duration(seconds: 2);
-  /// ~330m between markers at this latitude (visible separation at zoom 16).
-  static const double _scaleInDemoSpacing = 0.003;
-
-  static LatLng _scaleInDemoPosition(int index) {
-    const LatLng center = _multiDopinDemoCenter;
-    const double s = _scaleInDemoSpacing;
-    switch (index) {
-      case 0:
-        return center;
-      case 1:
-        return LatLng(center.latitude + s, center.longitude);
-      case 2:
-        return LatLng(center.latitude, center.longitude + s);
-      case 3:
-        return LatLng(center.latitude - s, center.longitude);
-      case 4:
-        return LatLng(center.latitude, center.longitude - s);
-      case 5:
-        return LatLng(center.latitude + s, center.longitude + s);
-      default:
-        return center;
-    }
-  }
-
-  static DopinMarker _scaleInDemoSingleMarker(int imageId) {
-    return DopinMarker(
-      imageUrls: <String>['https://i.pravatar.cc/150?img=$imageId'],
-      width: 46,
-      height: 46,
-      borderWidth: 3,
-      borderColor: Colors.white,
-      borderRadius: 12,
-      labelColor: _labelColor,
-    );
-  }
-
-  static final List<Annotation> _scaleInDemoMarkers = <Annotation>[
-    Annotation(
-      annotationId: AnnotationId('scale_in_demo_0'),
-      position: _scaleInDemoPosition(0),
-      scaleInOnAdd: true,
-      onTap: () {},
-      shadow: _demoShadow,
-      dopinMarker: _scaleInDemoSingleMarker(1),
-    ),
-    Annotation(
-      annotationId: AnnotationId('scale_in_demo_1'),
-      position: _scaleInDemoPosition(1),
-      scaleInOnAdd: true,
-      onTap: () {},
-      shadow: _demoShadow,
-      dopinMarker: _scaleInDemoSingleMarker(2),
-    ),
-    Annotation(
-      annotationId: AnnotationId('scale_in_demo_2'),
-      position: _scaleInDemoPosition(2),
-      scaleInOnAdd: true,
-      onTap: () {},
-      shadow: _demoShadow,
-      dopinMarker: _scaleInDemoSingleMarker(3),
-    ),
-    Annotation(
-      annotationId: AnnotationId('scale_in_demo_3'),
-      position: _scaleInDemoPosition(3),
-      scaleInOnAdd: true,
-      onTap: () {},
-      shadow: _demoShadow,
-      dopinMarker: _scaleInDemoSingleMarker(4),
-    ),
-    Annotation(
-      annotationId: AnnotationId('scale_in_demo_4'),
-      position: _scaleInDemoPosition(4),
-      scaleInOnAdd: true,
-      onTap: () {},
-      shadow: _demoShadow,
-      dopinMarker: _scaleInDemoSingleMarker(5),
-    ),
-    Annotation(
-      annotationId: AnnotationId('scale_in_demo_5'),
-      position: _scaleInDemoPosition(5),
-      scaleInOnAdd: true,
-      onTap: () {},
-      shadow: _demoShadow,
-      dopinMarker: _scaleInDemoSingleMarker(6),
-    ),
-  ];
-
-  Timer? _scaleInDemoTimer;
-  int _scaleInDemoMarkerIndex = 0;
-
-  void _scheduleScaleInMarkerDemo() {
-    Future<void>.delayed(_scaleInDemoInitialDelay, () {
-      if (!mounted) return;
-      _addNextScaleInDemoMarker();
-
-      _scaleInDemoTimer = Timer.periodic(_scaleInDemoInterval, (_) {
-        if (!mounted) {
-          _scaleInDemoTimer?.cancel();
-          return;
-        }
-        if (_scaleInDemoMarkerIndex >= _scaleInDemoMarkers.length) {
-          _scaleInDemoTimer?.cancel();
-          return;
-        }
-        _addNextScaleInDemoMarker();
-      });
-    });
-  }
-
-  void _addNextScaleInDemoMarker() {
-    if (_scaleInDemoMarkerIndex >= _scaleInDemoMarkers.length) return;
-    final marker = _scaleInDemoMarkers[_scaleInDemoMarkerIndex];
-    setState(() {
-      _annotations = {..._annotations, marker};
-      _status =
-          'Scale-in demo: marker ${_scaleInDemoMarkerIndex + 1}/${_scaleInDemoMarkers.length}';
-    });
-    _scaleInDemoMarkerIndex++;
-  }
+  late final Set<Annotation> _annotations = _dopinStackCountDemos();
 
   @override
   void initState() {
     super.initState();
     _lastCameraPosition = _losAngeles;
-    _status = 'Scale-in demo starts in 5s (then every 2s)';
-    _scheduleScaleInMarkerDemo();
+    _status = 'Dopin stack demo: 1 → 5 images (west to east)';
   }
 
   @override
   void dispose() {
-    _scaleInDemoTimer?.cancel();
     _stopFocusOrbit();
     super.dispose();
   }
