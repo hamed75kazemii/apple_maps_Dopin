@@ -244,6 +244,7 @@ extension AppleMapController: AnnotationDelegate {
         }
         // If annotation is not visible set alpha to 0 and don't let the user interact with it
         if !annotation.isVisible! {
+            annotation.pendingScaleInAnimation = false
             annotationView!.canShowCallout = false
             annotationView!.alpha = CGFloat(0.0)
             annotationView!.isDraggable = false
@@ -262,6 +263,7 @@ extension AppleMapController: AnnotationDelegate {
         annotationView!.alpha = CGFloat(annotation.alpha ?? 1.00)
         annotationView!.isDraggable = annotation.isDraggable ?? false
         self.configureClustering(for: annotationView!, annotation: annotation)
+        annotationView!.playScaleInOnAddIfNeeded(for: annotation)
 
         return annotationView!
     }
@@ -287,7 +289,9 @@ extension AppleMapController: AnnotationDelegate {
 
         if annotation.id == Self.userLocationMarkerId {
             view.clusteringIdentifier = nil
-            view.collisionMode = .none
+            if #available(iOS 14.0, *) {
+                view.collisionMode = .none
+            }
             view.displayPriority = .required
             return
         }
@@ -444,6 +448,9 @@ extension AppleMapController: AnnotationDelegate {
             annotation.zIndex = self.getNextAnnotationZIndex()
             channel.invokeMethod("annotation#onZIndexChanged", arguments: ["annotationId": annotation.id!, "zIndex": annotation.zIndex])
         }
+        if annotation.scaleInOnAdd {
+            annotation.pendingScaleInAnimation = true
+        }
         self.mapView.addAnnotation(annotation)
     }
 
@@ -510,6 +517,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.glowColorArgb = annotation.glowColorArgb
                 oldAnnotation.glowIntensity = annotation.glowIntensity
                 oldAnnotation.glowAnchor = annotation.glowAnchor
+                oldAnnotation.scaleInOnAdd = annotation.scaleInOnAdd
             })
             
             if let view = self.mapView.view(for: oldAnnotation) {

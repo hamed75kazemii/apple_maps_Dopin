@@ -222,84 +222,141 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   bool get _isFocused => _focusedPoi != null;
 
-  late final Set<Annotation> _annotations = <Annotation>{
-    ..._multiDopinLocationDemos(),
+  late Set<Annotation> _annotations = <Annotation>{};
+
+  static const Duration _scaleInDemoInitialDelay = Duration(seconds: 5);
+  static const Duration _scaleInDemoInterval = Duration(seconds: 2);
+  /// ~330m between markers at this latitude (visible separation at zoom 16).
+  static const double _scaleInDemoSpacing = 0.003;
+
+  static LatLng _scaleInDemoPosition(int index) {
+    const LatLng center = _multiDopinDemoCenter;
+    const double s = _scaleInDemoSpacing;
+    switch (index) {
+      case 0:
+        return center;
+      case 1:
+        return LatLng(center.latitude + s, center.longitude);
+      case 2:
+        return LatLng(center.latitude, center.longitude + s);
+      case 3:
+        return LatLng(center.latitude - s, center.longitude);
+      case 4:
+        return LatLng(center.latitude, center.longitude - s);
+      case 5:
+        return LatLng(center.latitude + s, center.longitude + s);
+      default:
+        return center;
+    }
+  }
+
+  static DopinMarker _scaleInDemoSingleMarker(int imageId) {
+    return DopinMarker(
+      imageUrls: <String>['https://i.pravatar.cc/150?img=$imageId'],
+      width: 46,
+      height: 46,
+      borderWidth: 3,
+      borderColor: Colors.white,
+      borderRadius: 12,
+      labelColor: _labelColor,
+    );
+  }
+
+  static final List<Annotation> _scaleInDemoMarkers = <Annotation>[
     Annotation(
-      annotationId: const AnnotationId('marker_multi_image_event'),
-      position: const LatLng(34.057, -118.247),
-      onTap: () => _onMarkerTap('marker_event'),
-      // glow: true,
+      annotationId: AnnotationId('scale_in_demo_0'),
+      position: _scaleInDemoPosition(0),
+      scaleInOnAdd: true,
+      onTap: () {},
       shadow: _demoShadow,
-      dopinMarker: DopinMarker(
-        count: 12,
-        imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
-        width: 46,
-        height: 46,
-        borderWidth: 3,
-        borderColor: Colors.white,
-        borderRadius: 22,
-        labelColor: _labelColor,
-      ),
+      dopinMarker: _scaleInDemoSingleMarker(1),
     ),
     Annotation(
-      annotationId: const AnnotationId('marker_multi_image_event2'),
-      position: const LatLng(34.057, -118.248),
-      onTap: () => _onMarkerTap('marker_event'),
-      // glow: true,
+      annotationId: AnnotationId('scale_in_demo_1'),
+      position: _scaleInDemoPosition(1),
+      scaleInOnAdd: true,
+      onTap: () {},
       shadow: _demoShadow,
-      dopinMarker: DopinMarker(
-        //   count: 12,
-        imageUrls: <String>['https://i.pravatar.cc/150?img=3'],
-        width: 46,
-        height: 46,
-        borderWidth: 3,
-        borderColor: Colors.white,
-        borderRadius: 22,
-        labelColor: _labelColor,
-      ),
+      dopinMarker: _scaleInDemoSingleMarker(2),
     ),
     Annotation(
-      annotationId: const AnnotationId('marker_event'),
-      position: const LatLng(34.054, -118.245),
-      onTap: () => _onMarkerTap('marker_event'),
+      annotationId: AnnotationId('scale_in_demo_2'),
+      position: _scaleInDemoPosition(2),
+      scaleInOnAdd: true,
+      onTap: () {},
       shadow: _demoShadow,
-      dopinMarker: const DopinMarker(
-        imageUrls: <String>['https://i.pravatar.cc/150?img=8'],
-        width: 46,
-        height: 46,
-        borderWidth: 3,
-        borderColor: Colors.white,
-        borderRadius: 12,
-        labelColor: _labelColor,
-      ),
+      dopinMarker: _scaleInDemoSingleMarker(3),
     ),
     Annotation(
-      annotationId: const AnnotationId('marker_card'),
-      position: const LatLng(34.050, -118.250),
-      onTap: () => _onMarkerTap('marker_card'),
+      annotationId: AnnotationId('scale_in_demo_3'),
+      position: _scaleInDemoPosition(3),
+      scaleInOnAdd: true,
+      onTap: () {},
       shadow: _demoShadow,
-      dopinMarker: const DopinMarker(
-        imageUrls: <String>['https://i.pravatar.cc/150?img=15'],
-        label: 'Starbucks',
-        width: 46,
-        height: 46,
-        borderWidth: 3,
-        borderColor: Colors.white,
-        borderRadius: 12,
-        labelColor: _labelColor,
-      ),
+      dopinMarker: _scaleInDemoSingleMarker(4),
     ),
-    ..._clusterDemoAnnotations(),
-  };
+    Annotation(
+      annotationId: AnnotationId('scale_in_demo_4'),
+      position: _scaleInDemoPosition(4),
+      scaleInOnAdd: true,
+      onTap: () {},
+      shadow: _demoShadow,
+      dopinMarker: _scaleInDemoSingleMarker(5),
+    ),
+    Annotation(
+      annotationId: AnnotationId('scale_in_demo_5'),
+      position: _scaleInDemoPosition(5),
+      scaleInOnAdd: true,
+      onTap: () {},
+      shadow: _demoShadow,
+      dopinMarker: _scaleInDemoSingleMarker(6),
+    ),
+  ];
+
+  Timer? _scaleInDemoTimer;
+  int _scaleInDemoMarkerIndex = 0;
+
+  void _scheduleScaleInMarkerDemo() {
+    Future<void>.delayed(_scaleInDemoInitialDelay, () {
+      if (!mounted) return;
+      _addNextScaleInDemoMarker();
+
+      _scaleInDemoTimer = Timer.periodic(_scaleInDemoInterval, (_) {
+        if (!mounted) {
+          _scaleInDemoTimer?.cancel();
+          return;
+        }
+        if (_scaleInDemoMarkerIndex >= _scaleInDemoMarkers.length) {
+          _scaleInDemoTimer?.cancel();
+          return;
+        }
+        _addNextScaleInDemoMarker();
+      });
+    });
+  }
+
+  void _addNextScaleInDemoMarker() {
+    if (_scaleInDemoMarkerIndex >= _scaleInDemoMarkers.length) return;
+    final marker = _scaleInDemoMarkers[_scaleInDemoMarkerIndex];
+    setState(() {
+      _annotations = {..._annotations, marker};
+      _status =
+          'Scale-in demo: marker ${_scaleInDemoMarkerIndex + 1}/${_scaleInDemoMarkers.length}';
+    });
+    _scaleInDemoMarkerIndex++;
+  }
 
   @override
   void initState() {
     super.initState();
     _lastCameraPosition = _losAngeles;
+    _status = 'Scale-in demo starts in 5s (then every 2s)';
+    _scheduleScaleInMarkerDemo();
   }
 
   @override
   void dispose() {
+    _scaleInDemoTimer?.cancel();
     _stopFocusOrbit();
     super.dispose();
   }

@@ -274,6 +274,87 @@ extension FlutterMarkerAnnotationView: ZPositionableAnnotation {
     }
 }
 
+@available(iOS 11.0, *)
+extension MKAnnotationView {
+    /// Plays a spring scale-in when [FlutterAnnotation.pendingScaleInAnimation] is set.
+    func playScaleInOnAddIfNeeded(for annotation: FlutterAnnotation) {
+        guard annotation.pendingScaleInAnimation else { return }
+        annotation.pendingScaleInAnimation = false
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.layoutIfNeeded()
+            guard self.bounds.width > 0.5, self.bounds.height > 0.5 else { return }
+
+            let targetTransform = self.transform
+            let smallScale: CGFloat = 0.01
+            let halfScale: CGFloat = 0.8
+            let overshootScale: CGFloat = 1.25
+            let animationOptions: UIView.AnimationOptions = [
+                .allowUserInteraction,
+                .beginFromCurrentState,
+            ]
+
+            func scaledTransform(_ factor: CGFloat) -> CGAffineTransform {
+                targetTransform.scaledBy(x: factor, y: factor)
+            }
+
+            func animateScale(
+                to factor: CGFloat,
+                duration: TimeInterval,
+                curve: UIView.AnimationOptions = [.curveEaseInOut],
+                damping: CGFloat? = nil,
+                velocity: CGFloat = 0,
+                completion: ((Bool) -> Void)? = nil
+            ) {
+                if let damping = damping {
+                    UIView.animate(
+                        withDuration: duration,
+                        delay: 0,
+                        usingSpringWithDamping: damping,
+                        initialSpringVelocity: velocity,
+                        options: animationOptions,
+                        animations: {
+                            self.transform = scaledTransform(factor)
+                        },
+                        completion: completion
+                    )
+                } else {
+                    UIView.animate(
+                        withDuration: duration,
+                        delay: 0,
+                        options: animationOptions.union(curve),
+                        animations: {
+                            self.transform = scaledTransform(factor)
+                        },
+                        completion: completion
+                    )
+                }
+            }
+
+            self.transform = scaledTransform(smallScale)
+
+            // Pulse 1: small → big → half scale
+            animateScale(to: overshootScale, duration: 0.12, curve: .curveEaseOut) { finished in
+                guard finished else { return }
+                animateScale(to: halfScale, duration: 0.1, curve: .curveEaseIn) { finished in
+                    guard finished else { return }
+                    // Pulse 2: half → big → final size
+                    animateScale(to: overshootScale, duration: 0.12, curve: .curveEaseOut) { finished in
+                        guard finished else { return }
+                        animateScale(
+                            to: 1.0,
+                            duration: 0.30,
+                            damping: 0.58,
+                            velocity: 0.45
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// iOS 11 automagically manages the CALayer zPosition, which breaks manual z-ordering.
 /// This subclass just throws away any values which the OS sets for zPosition, and provides
 /// a specialized accessor for setting the zPosition

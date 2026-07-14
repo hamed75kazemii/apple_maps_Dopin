@@ -86,6 +86,11 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var cardDistanceFontSize: CGFloat = 15
     var cardMaxWidth: CGFloat = 320
 
+    /// When true, plays a spring scale-in animation when the marker is first added.
+    var scaleInOnAdd: Bool = false
+    /// Runtime flag set on add; consumed when the entry animation runs.
+    var pendingScaleInAnimation: Bool = false
+
     var dopinMarkerSignature: String {
         let pngLen = dopinImagePngData?.count ?? 0
         let asset = dopinImageAssetName ?? ""
@@ -174,6 +179,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         } else         if let gi = annotationData["glowIntensity"] as? NSNumber {
             self.glowIntensity = min(max(gi.doubleValue, 0), 1)
         }
+        self.scaleInOnAdd = annotationData["scaleInOnAdd"] as? Bool ?? false
         if let glowAnchorJSON = annotationData["glowAnchor"] as? Array<Double> {
             self.glowAnchor = Offset(from: glowAnchorJSON)
         }
