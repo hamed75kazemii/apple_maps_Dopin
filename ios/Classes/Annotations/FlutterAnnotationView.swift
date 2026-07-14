@@ -335,12 +335,12 @@ extension MKAnnotationView {
             self.transform = scaledTransform(smallScale)
 
             // Pulse 1: small → big → half scale
-            animateScale(to: overshootScale, duration: 0.12, curve: .curveEaseOut) { finished in
+            animateScale(to: overshootScale, duration: 0.08, curve: .curveEaseOut) { finished in
                 guard finished else { return }
                 animateScale(to: halfScale, duration: 0.1, curve: .curveEaseIn) { finished in
                     guard finished else { return }
                     // Pulse 2: half → big → final size
-                    animateScale(to: overshootScale, duration: 0.12, curve: .curveEaseOut) { finished in
+                    animateScale(to: overshootScale, duration: 0.07, curve: .curveEaseOut) { finished in
                         guard finished else { return }
                         animateScale(
                             to: 1.0,
