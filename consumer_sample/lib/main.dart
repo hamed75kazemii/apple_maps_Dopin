@@ -52,6 +52,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   Completer<void>? _cameraIdleCompleter;
 
   static const Duration _focusFlyDuration = Duration(milliseconds: 420);
+  static const Duration _markerRevealInterval = Duration(seconds: 2);
 
   static const LatLng _multiDopinDemoCenter = LatLng(34.0530, -118.2420);
 
@@ -63,18 +64,18 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   static const List<String> _demoGroupUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
-    'https://i.pravatar.cc/150?img=2',
-    'https://i.pravatar.cc/150?img=3',
-    'https://i.pravatar.cc/150?img=4',
+  //  'https://i.pravatar.cc/150?img=2',
+   // 'https://i.pravatar.cc/150?img=3',
+   // 'https://i.pravatar.cc/150?img=4',
   ];
   static const List<String> _demoDualUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
-    'https://i.pravatar.cc/150?img=2',
+  //  'https://i.pravatar.cc/150?img=2',
   ];
   static const List<String> _demoTripleUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
-    'https://i.pravatar.cc/150?img=2',
-    'https://i.pravatar.cc/150?img=3',
+  //  'https://i.pravatar.cc/150?img=2',
+   // 'https://i.pravatar.cc/150?img=3',
   ];
   static const Color _labelColor = Color(0xFF7B2CBF);
   static const List<Color> _labelGradientColors = <Color>[
@@ -152,6 +153,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         annotationId: const AnnotationId('dopin_stack_1'),
         position: slot(0),
         onTap: () {},
+        scaleInOnAdd: true,
         shadow: _demoShadow,
         dopinMarker: _singleImageMarker,
       ),
@@ -159,6 +161,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         annotationId: const AnnotationId('dopin_stack_2'),
         position: slot(1),
         onTap: () {},
+        scaleInOnAdd: true,
         shadow: _demoShadow,
         dopinMarker: _dualImageMarker,
       ),
@@ -166,6 +169,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         annotationId: const AnnotationId('dopin_stack_3'),
         position: slot(2),
         onTap: () {},
+        scaleInOnAdd: true,
         shadow: _demoShadow,
         dopinMarker: _tripleImageMarker,
       ),
@@ -173,6 +177,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         annotationId: const AnnotationId('dopin_stack_4'),
         position: slot(3),
         onTap: () {},
+        scaleInOnAdd: true,
         shadow: _demoShadow,
         dopinMarker: _quadImageMarker,
       ),
@@ -180,6 +185,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         annotationId: const AnnotationId('dopin_stack_5'),
         position: slot(4),
         onTap: () {},
+        scaleInOnAdd: true,
         shadow: _demoShadow,
         dopinMarker: _fiveDopinMarker,
       ),
@@ -226,17 +232,50 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   bool get _isFocused => _focusedPoi != null;
 
-  late final Set<Annotation> _annotations = _dopinStackCountDemos();
+  Set<Annotation> _annotations = <Annotation>{};
+  late final List<Annotation> _pendingMarkers = _dopinStackCountDemos().toList();
+  int _revealedMarkerCount = 0;
+  Timer? _markerRevealTimer;
 
   @override
   void initState() {
     super.initState();
     _lastCameraPosition = _losAngeles;
-    _status = 'Dopin stack demo: 1 → 5 images (west to east)';
+    _status = 'مارکرها هر ۲ ثانیه یکی ظاهر می‌شوند';
+    _startMarkerReveal();
+  }
+
+  void _startMarkerReveal() {
+    _revealNextMarker();
+    _markerRevealTimer = Timer.periodic(_markerRevealInterval, (_) {
+      _revealNextMarker();
+    });
+  }
+
+  void _revealNextMarker() {
+    if (_revealedMarkerCount >= _pendingMarkers.length) {
+      _markerRevealTimer?.cancel();
+      _markerRevealTimer = null;
+      if (mounted) {
+        setState(() => _status = 'همه ۵ مارکر نمایش داده شد');
+      }
+      return;
+    }
+
+    final marker = _pendingMarkers[_revealedMarkerCount];
+    if (!mounted) return;
+
+    setState(() {
+      _annotations = <Annotation>{..._annotations, marker};
+      _revealedMarkerCount++;
+      _status =
+          'مارکر $_revealedMarkerCount از ${_pendingMarkers.length} ظاهر شد';
+    });
   }
 
   @override
   void dispose() {
+    _markerRevealTimer?.cancel();
     _stopFocusOrbit();
     super.dispose();
   }

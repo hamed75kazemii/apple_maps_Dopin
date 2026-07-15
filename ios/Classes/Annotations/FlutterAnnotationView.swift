@@ -288,69 +288,56 @@ extension MKAnnotationView {
 
             let targetTransform = self.transform
             let smallScale: CGFloat = 0.01
-            let halfScale: CGFloat = 0.8
-            let overshootScale: CGFloat = 1.25
+            let bounceUp = -max(self.bounds.height * 0.14, 8)
+            let bounceDown = max(self.bounds.height * 0.09, 5)
             let animationOptions: UIView.AnimationOptions = [
                 .allowUserInteraction,
                 .beginFromCurrentState,
             ]
 
-            func scaledTransform(_ factor: CGFloat) -> CGAffineTransform {
-                targetTransform.scaledBy(x: factor, y: factor)
+            func markerTransform(scale: CGFloat, yOffset: CGFloat) -> CGAffineTransform {
+                targetTransform
+                    .scaledBy(x: scale, y: scale)
+                    .translatedBy(x: 0, y: yOffset / scale)
             }
 
-            func animateScale(
-                to factor: CGFloat,
-                duration: TimeInterval,
-                curve: UIView.AnimationOptions = [.curveEaseInOut],
-                damping: CGFloat? = nil,
-                velocity: CGFloat = 0,
-                completion: ((Bool) -> Void)? = nil
-            ) {
-                if let damping = damping {
-                    UIView.animate(
-                        withDuration: duration,
-                        delay: 0,
-                        usingSpringWithDamping: damping,
-                        initialSpringVelocity: velocity,
-                        options: animationOptions,
-                        animations: {
-                            self.transform = scaledTransform(factor)
-                        },
-                        completion: completion
-                    )
-                } else {
-                    UIView.animate(
-                        withDuration: duration,
-                        delay: 0,
-                        options: animationOptions.union(curve),
-                        animations: {
-                            self.transform = scaledTransform(factor)
-                        },
-                        completion: completion
-                    )
-                }
-            }
+            self.transform = markerTransform(scale: smallScale, yOffset: 0)
 
-            self.transform = scaledTransform(smallScale)
-
-            // Pulse 1: small → big → half scale
-            animateScale(to: overshootScale, duration: 0.08, curve: .curveEaseOut) { finished in
-                guard finished else { return }
-                animateScale(to: halfScale, duration: 0.1, curve: .curveEaseIn) { finished in
+            // small → full size while jumping up
+            UIView.animate(
+                withDuration: 0.14,
+                delay: 0,
+                options: animationOptions.union(.curveEaseOut),
+                animations: {
+                    self.transform = markerTransform(scale: 1.0, yOffset: bounceUp)
+                },
+                completion: { finished in
                     guard finished else { return }
-                    // Pulse 2: half → big → final size
-                    animateScale(to: overshootScale, duration: 0.07, curve: .curveEaseOut) { finished in
-                        guard finished else { return }
-                        animateScale(
-                            to: 1.0,
-                            duration: 0.30,
-                            damping: 0.58,
-                            velocity: 0.45
-                        )
-                    }
+                    // overshoot below the resting position
+                    UIView.animate(
+                        withDuration: 0.12,
+                        delay: 0,
+                        options: animationOptions.union(.curveEaseIn),
+                        animations: {
+                            self.transform = markerTransform(scale: 1.0, yOffset: bounceDown)
+                        },
+                        completion: { finished in
+                            guard finished else { return }
+                            // settle back to the original position
+                            UIView.animate(
+                                withDuration: 0.28,
+                                delay: 0,
+                                usingSpringWithDamping: 0.62,
+                                initialSpringVelocity: 0.6,
+                                options: animationOptions,
+                                animations: {
+                                    self.transform = targetTransform
+                                }
+                            )
+                        }
+                    )
                 }
-            }
+            )
         }
     }
 }
