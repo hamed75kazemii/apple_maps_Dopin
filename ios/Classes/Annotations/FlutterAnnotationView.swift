@@ -302,6 +302,7 @@ extension MKAnnotationView {
             }
 
             self.transform = markerTransform(scale: smallScale, yOffset: 0)
+            self.alpha = CGFloat(annotation.alpha ?? 1.0)
 
             // small → full size while jumping up
             UIView.animate(
@@ -334,6 +335,65 @@ extension MKAnnotationView {
                                     self.transform = targetTransform
                                 }
                             )
+                        }
+                    )
+                }
+            )
+        }
+    }
+
+    /// Plays a scale-out hide when [FlutterAnnotation.pendingScaleOutAnimation] is set.
+    func playScaleOutOnHideIfNeeded(for annotation: FlutterAnnotation) {
+        guard annotation.pendingScaleOutAnimation else { return }
+        annotation.pendingScaleOutAnimation = false
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.layoutIfNeeded()
+            guard self.bounds.width > 0.5, self.bounds.height > 0.5 else {
+                self.alpha = 0
+                self.canShowCallout = false
+                self.isDraggable = false
+                return
+            }
+
+            let targetTransform = CGAffineTransform.identity
+            let restingTransform = self.transform
+            let smallScale: CGFloat = 0.01
+            let bounceUp = -max(self.bounds.height * 0.14, 8)
+            let animationOptions: UIView.AnimationOptions = [
+                .allowUserInteraction,
+                .beginFromCurrentState,
+            ]
+
+            func markerTransform(scale: CGFloat, yOffset: CGFloat) -> CGAffineTransform {
+                restingTransform
+                    .scaledBy(x: scale, y: scale)
+                    .translatedBy(x: 0, y: yOffset / max(scale, 0.001))
+            }
+
+            // jump up slightly, then shrink + fade out
+            UIView.animate(
+                withDuration: 0.12,
+                delay: 0,
+                options: animationOptions.union(.curveEaseOut),
+                animations: {
+                    self.transform = markerTransform(scale: 1.0, yOffset: bounceUp)
+                },
+                completion: { finished in
+                    guard finished else { return }
+                    UIView.animate(
+                        withDuration: 0.18,
+                        delay: 0,
+                        options: animationOptions.union(.curveEaseIn),
+                        animations: {
+                            self.transform = markerTransform(scale: smallScale, yOffset: 0)
+                            self.alpha = 0
+                        },
+                        completion: { _ in
+                            self.transform = targetTransform
+                            self.canShowCallout = false
+                            self.isDraggable = false
                         }
                     )
                 }

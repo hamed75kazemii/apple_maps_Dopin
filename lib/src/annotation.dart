@@ -164,6 +164,7 @@ class Annotation {
     this.svgMarker,
     this.cardMarker,
     this.scaleInOnAdd = false,
+    this.scaleOutOnHide = false,
   })  : assert(0.0 <= alpha && alpha <= 1.0),
         assert(0.0 <= glowIntensity && glowIntensity <= 1.0);
 
@@ -247,6 +248,9 @@ class Annotation {
   /// When true (iOS), the marker plays a spring scale-in animation when first added.
   final bool scaleInOnAdd;
 
+  /// When true (iOS), hiding via [visible] `false` plays a scale-out animation.
+  final bool scaleOutOnHide;
+
   /// Creates a new [Annotation] object whose values are the same as this instance,
   /// unless overwritten by the specified parameters.
   Annotation copyWith({
@@ -270,6 +274,7 @@ class Annotation {
     SvgMarker? svgMarkerParam,
     CardMarker? cardMarkerParam,
     bool? scaleInOnAddParam,
+    bool? scaleOutOnHideParam,
   }) {
     return Annotation(
       annotationId: annotationId,
@@ -292,6 +297,7 @@ class Annotation {
       svgMarker: svgMarkerParam ?? svgMarker,
       cardMarker: cardMarkerParam ?? cardMarker,
       scaleInOnAdd: scaleInOnAddParam ?? scaleInOnAdd,
+      scaleOutOnHide: scaleOutOnHideParam ?? scaleOutOnHide,
     );
   }
 
@@ -332,6 +338,7 @@ class Annotation {
       json['cardMarker'] = cardMarker!._toJson();
     }
     json['scaleInOnAdd'] = scaleInOnAdd;
+    json['scaleOutOnHide'] = scaleOutOnHide;
     return json;
   }
 
@@ -357,7 +364,8 @@ class Annotation {
         dopinMarker == typedOther.dopinMarker &&
         svgMarker == typedOther.svgMarker &&
         cardMarker == typedOther.cardMarker &&
-        scaleInOnAdd == typedOther.scaleInOnAdd;
+        scaleInOnAdd == typedOther.scaleInOnAdd &&
+        scaleOutOnHide == typedOther.scaleOutOnHide;
   }
 
   @override
@@ -379,7 +387,7 @@ class Annotation {
         dopinMarker,
         svgMarker,
         cardMarker,
-        scaleInOnAdd,
+        Object.hash(scaleInOnAdd, scaleOutOnHide),
       );
 
   @override

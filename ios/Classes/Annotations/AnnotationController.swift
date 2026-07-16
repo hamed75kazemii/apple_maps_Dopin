@@ -245,6 +245,15 @@ extension AppleMapController: AnnotationDelegate {
         // If annotation is not visible set alpha to 0 and don't let the user interact with it
         if !annotation.isVisible! {
             annotation.pendingScaleInAnimation = false
+            if annotation.pendingScaleOutAnimation {
+                // Keep the view visible so the exit animation can play.
+                annotationView!.canShowCallout = true
+                annotationView!.alpha = CGFloat(annotation.alpha ?? 1.00)
+                annotationView!.isDraggable = false
+                self.configureClustering(for: annotationView!, annotation: annotation)
+                annotationView!.playScaleOutOnHideIfNeeded(for: annotation)
+                return annotationView! as! FlutterAnnotationView
+            }
             annotationView!.canShowCallout = false
             annotationView!.alpha = CGFloat(0.0)
             annotationView!.isDraggable = false
@@ -456,6 +465,18 @@ extension AppleMapController: AnnotationDelegate {
 
     private func updateAnnotation(annotation: FlutterAnnotation) {
         if let oldAnnotation = self.getAnnotation(with: annotation.id) {
+            let wasVisible = oldAnnotation.isVisible ?? true
+            let willBeVisible = annotation.isVisible ?? true
+            let shouldAnimateHide = wasVisible && !willBeVisible && annotation.scaleOutOnHide
+            let shouldAnimateShow = !wasVisible && willBeVisible && annotation.scaleInOnAdd
+
+            if shouldAnimateHide {
+                oldAnnotation.pendingScaleOutAnimation = true
+            }
+            if shouldAnimateShow {
+                oldAnnotation.pendingScaleInAnimation = true
+            }
+
             UIView.animate(withDuration: 0.32, animations: {
                 oldAnnotation.coordinate = annotation.coordinate
                 oldAnnotation.zIndex = annotation.zIndex
@@ -518,19 +539,47 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.glowIntensity = annotation.glowIntensity
                 oldAnnotation.glowAnchor = annotation.glowAnchor
                 oldAnnotation.scaleInOnAdd = annotation.scaleInOnAdd
+                oldAnnotation.scaleOutOnHide = annotation.scaleOutOnHide
             })
             
             if let view = self.mapView.view(for: oldAnnotation) {
-                if annotation.usesDopinMarker || annotation.usesSvgMarker || annotation.usesCardMarker {
+                if shouldAnimateHide {
+                    // Keep the existing view and play the exit animation on it.
+                    // Avoid getAnnotationView here — it would snap alpha to 0.
+                    view.playScaleOutOnHideIfNeeded(for: oldAnnotation)
+                } else if annotation.usesDopinMarker || annotation.usesSvgMarker || annotation.usesCardMarker {
                     let newView = getAnnotationView(annotation: annotation)
                     view.frame.size = newView.frame.size
                     view.bounds = newView.bounds
                     view.setNeedsLayout()
+                    self.configureClustering(for: view, annotation: annotation)
+                    if shouldAnimateShow {
+                        view.alpha = CGFloat(annotation.alpha ?? 1.00)
+                        view.canShowCallout = true
+                        view.playScaleInOnAddIfNeeded(for: oldAnnotation)
+                    } else if !(annotation.isVisible ?? true) {
+                        view.alpha = 0
+                        view.canShowCallout = false
+                        view.isDraggable = false
+                    } else {
+                        view.alpha = CGFloat(annotation.alpha ?? 1.00)
+                    }
                 } else {
                     let newAnnotationView = getAnnotationView(annotation: annotation)
                     view.image = newAnnotationView.image
+                    self.configureClustering(for: view, annotation: annotation)
+                    if shouldAnimateShow {
+                        view.alpha = CGFloat(annotation.alpha ?? 1.00)
+                        view.canShowCallout = true
+                        view.playScaleInOnAddIfNeeded(for: oldAnnotation)
+                    } else if !(annotation.isVisible ?? true) {
+                        view.alpha = 0
+                        view.canShowCallout = false
+                        view.isDraggable = false
+                    } else {
+                        view.alpha = CGFloat(annotation.alpha ?? 1.00)
+                    }
                 }
-                self.configureClustering(for: view, annotation: annotation)
             }
         }
     }

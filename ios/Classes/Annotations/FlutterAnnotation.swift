@@ -90,6 +90,10 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var scaleInOnAdd: Bool = false
     /// Runtime flag set on add; consumed when the entry animation runs.
     var pendingScaleInAnimation: Bool = false
+    /// When true, hiding (`visible` → false) plays a scale-out animation.
+    var scaleOutOnHide: Bool = false
+    /// Runtime flag set on hide; consumed when the exit animation runs.
+    var pendingScaleOutAnimation: Bool = false
 
     var dopinMarkerSignature: String {
         let pngLen = dopinImagePngData?.count ?? 0
@@ -180,6 +184,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             self.glowIntensity = min(max(gi.doubleValue, 0), 1)
         }
         self.scaleInOnAdd = annotationData["scaleInOnAdd"] as? Bool ?? false
+        self.scaleOutOnHide = annotationData["scaleOutOnHide"] as? Bool ?? false
         if let glowAnchorJSON = annotationData["glowAnchor"] as? Array<Double> {
             self.glowAnchor = Offset(from: glowAnchorJSON)
         }

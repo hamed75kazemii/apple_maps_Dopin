@@ -64,18 +64,18 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
 
   static const List<String> _demoGroupUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
-  //  'https://i.pravatar.cc/150?img=2',
-   // 'https://i.pravatar.cc/150?img=3',
-   // 'https://i.pravatar.cc/150?img=4',
+    //  'https://i.pravatar.cc/150?img=2',
+    // 'https://i.pravatar.cc/150?img=3',
+    // 'https://i.pravatar.cc/150?img=4',
   ];
   static const List<String> _demoDualUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
-  //  'https://i.pravatar.cc/150?img=2',
+    //  'https://i.pravatar.cc/150?img=2',
   ];
   static const List<String> _demoTripleUrls = <String>[
     'https://i.pravatar.cc/150?img=1',
-  //  'https://i.pravatar.cc/150?img=2',
-   // 'https://i.pravatar.cc/150?img=3',
+    //  'https://i.pravatar.cc/150?img=2',
+    // 'https://i.pravatar.cc/150?img=3',
   ];
   static const Color _labelColor = Color(0xFF7B2CBF);
   static const List<Color> _labelGradientColors = <Color>[
@@ -143,10 +143,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     const LatLng center = _multiDopinDemoCenter;
     const double spacing = 0.0012;
 
-    LatLng slot(int index) => LatLng(
-          center.latitude,
-          center.longitude + (index - 2) * spacing,
-        );
+    LatLng slot(int index) =>
+        LatLng(center.latitude, center.longitude + (index - 2) * spacing);
 
     return <Annotation>{
       Annotation(
@@ -154,6 +152,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         position: slot(0),
         onTap: () {},
         scaleInOnAdd: true,
+        scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _singleImageMarker,
       ),
@@ -162,6 +161,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         position: slot(1),
         onTap: () {},
         scaleInOnAdd: true,
+        scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _dualImageMarker,
       ),
@@ -170,6 +170,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         position: slot(2),
         onTap: () {},
         scaleInOnAdd: true,
+        scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _tripleImageMarker,
       ),
@@ -178,6 +179,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         position: slot(3),
         onTap: () {},
         scaleInOnAdd: true,
+        scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _quadImageMarker,
       ),
@@ -186,6 +188,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         position: slot(4),
         onTap: () {},
         scaleInOnAdd: true,
+        scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _fiveDopinMarker,
       ),
@@ -215,9 +218,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
           onTap: () {},
           shadow: _demoShadow,
           dopinMarker: DopinMarker(
-            imageUrls: <String>[
-              'https://i.pravatar.cc/150?img=${index + 1}',
-            ],
+            imageUrls: <String>['https://i.pravatar.cc/150?img=${index + 1}'],
             width: 40,
             height: 40,
             borderWidth: 3,
@@ -233,8 +234,11 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   bool get _isFocused => _focusedPoi != null;
 
   Set<Annotation> _annotations = <Annotation>{};
-  late final List<Annotation> _pendingMarkers = _dopinStackCountDemos().toList();
+  late final List<Annotation> _pendingMarkers = _dopinStackCountDemos()
+      .toList();
   int _revealedMarkerCount = 0;
+  int _hiddenMarkerCount = 0;
+  bool _isHidingMarkers = false;
   Timer? _markerRevealTimer;
 
   @override
@@ -256,9 +260,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     if (_revealedMarkerCount >= _pendingMarkers.length) {
       _markerRevealTimer?.cancel();
       _markerRevealTimer = null;
-      if (mounted) {
-        setState(() => _status = 'همه ۵ مارکر نمایش داده شد');
-      }
+      if (!mounted) return;
+      setState(() => _status = 'همه ۵ مارکر نمایش داده شد — شروع مخفی‌سازی…');
+      _startMarkerHide();
       return;
     }
 
@@ -270,6 +274,40 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       _revealedMarkerCount++;
       _status =
           'مارکر $_revealedMarkerCount از ${_pendingMarkers.length} ظاهر شد';
+    });
+  }
+
+  void _startMarkerHide() {
+    if (_isHidingMarkers) return;
+    _isHidingMarkers = true;
+    _hiddenMarkerCount = 0;
+    _hideNextMarker();
+    _markerRevealTimer = Timer.periodic(_markerRevealInterval, (_) {
+      _hideNextMarker();
+    });
+  }
+
+  void _hideNextMarker() {
+    if (_hiddenMarkerCount >= _pendingMarkers.length) {
+      _markerRevealTimer?.cancel();
+      _markerRevealTimer = null;
+      if (mounted) {
+        setState(() => _status = 'همه مارکرها با انیمیشن مخفی شدند');
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final targetId = _pendingMarkers[_hiddenMarkerCount].annotationId;
+
+    setState(() {
+      _annotations = _annotations.map((annotation) {
+        if (annotation.annotationId != targetId) return annotation;
+        return annotation.copyWith(visibleParam: false);
+      }).toSet();
+      _hiddenMarkerCount++;
+      _status =
+          'مارکر $_hiddenMarkerCount از ${_pendingMarkers.length} مخفی شد';
     });
   }
 
@@ -557,7 +595,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
                     ? Theme.of(context).colorScheme.onPrimary
                     : null,
                 onPressed: _onGoToMyLocation,
-                child: Icon(_followMyLocation ? Icons.gps_fixed : Icons.my_location),
+                child: Icon(
+                  _followMyLocation ? Icons.gps_fixed : Icons.my_location,
+                ),
               ),
             ),
 
@@ -599,10 +639,7 @@ class _FocusSheetSwitcher extends StatelessWidget {
       layoutBuilder: (currentChild, previousChildren) {
         return Stack(
           alignment: Alignment.bottomCenter,
-          children: [
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
+          children: [...previousChildren, ?currentChild],
         );
       },
       child: poi != null
