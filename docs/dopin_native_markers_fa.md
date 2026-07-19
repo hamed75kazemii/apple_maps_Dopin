@@ -104,6 +104,7 @@ AppleMap(
 | رفتار | توضیح |
 |--------|--------|
 | انواع مارکر | `DopinMarker`، `SvgMarker`، `CardMarker`، bitmap و pin |
+| دیالوگ بالای مارکر | `Annotation.dialog` با `MarkerDialog` (عرض ثابت + مارکی R→L) |
 | غیرفعال | `clusteringEnabled: false` |
 | لمس کلاستر | زوم خودکار (بدون `onTap` تک‌مارکر) |
 | مارکر موقعیت من | در کلاستر شرکت نمی‌کند |

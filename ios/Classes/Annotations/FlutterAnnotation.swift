@@ -86,6 +86,18 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var cardDistanceFontSize: CGFloat = 15
     var cardMaxWidth: CGFloat = 320
 
+    /// Pill dialog above Dopin / SVG markers (Figma marker dialog).
+    var usesMarkerDialog: Bool = false
+    var dialogText: String = ""
+    var dialogWidth: CGFloat = 163
+    var dialogHeight: CGFloat = 32
+    var dialogBackgroundColor: UIColor = UIColor(red: 19/255, green: 19/255, blue: 19/255, alpha: 1)
+    var dialogTextColor: UIColor = .white
+    var dialogFontSize: CGFloat = 14
+    var dialogHorizontalPadding: CGFloat = 10
+    var dialogGapAboveMarker: CGFloat = 4
+    var dialogMarqueeSpeed: CGFloat = 16
+
     /// When true, plays a spring scale-in animation when the marker is first added.
     var scaleInOnAdd: Bool = false
     /// Runtime flag set on add; consumed when the entry animation runs.
@@ -100,12 +112,27 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         let asset = dopinImageAssetName ?? ""
         let radius = dopinBorderRadius.map { "\($0)" } ?? "circle"
         let urls = dopinImageUrls.joined(separator: ",")
-        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)|\(dopinLabelGradientColors?.map { $0.description }.joined(separator: ",") ?? "")"
+        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)|\(dopinLabelGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(markerDialogSignature)"
     }
 
     var svgMarkerSignature: String {
         let pngLen = svgImagePngData?.count ?? 0
-        return "\(svgWidth)|\(svgHeight)|\(svgImageUrl ?? "")|\(pngLen)|\(svgEmoji ?? "")"
+        return "\(svgWidth)|\(svgHeight)|\(svgImageUrl ?? "")|\(pngLen)|\(svgEmoji ?? "")|\(markerDialogSignature)"
+    }
+
+    var markerDialogSignature: String {
+        guard usesMarkerDialog else { return "" }
+        return [
+            dialogText,
+            "\(dialogWidth)",
+            "\(dialogHeight)",
+            "\(dialogBackgroundColor)",
+            "\(dialogTextColor)",
+            "\(dialogFontSize)",
+            "\(dialogHorizontalPadding)",
+            "\(dialogGapAboveMarker)",
+            "\(dialogMarqueeSpeed)",
+        ].joined(separator: "|")
     }
 
     var cardMarkerSignature: String {
@@ -335,6 +362,33 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             if let v = Self.cg(card["distanceFontSize"]) { self.cardDistanceFontSize = v }
             if let v = Self.cg(card["maxWidth"]) { self.cardMaxWidth = v }
         }
+
+        if let dialog = annotationData["dialog"] as? Dictionary<String, Any> {
+            let rawText = (dialog["text"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !rawText.isEmpty {
+                self.usesMarkerDialog = true
+                self.dialogText = rawText
+                if let v = Self.cg(dialog["width"]) { self.dialogWidth = v }
+                if let v = Self.cg(dialog["height"]) { self.dialogHeight = v }
+                if let color = Self.argb(dialog["backgroundColor"]) {
+                    self.dialogBackgroundColor = Self.uiColorFromArgb(color)
+                }
+                if let color = Self.argb(dialog["textColor"]) {
+                    self.dialogTextColor = Self.uiColorFromArgb(color)
+                }
+                if let v = Self.cg(dialog["fontSize"]) { self.dialogFontSize = v }
+                if let v = Self.cg(dialog["horizontalPadding"]) {
+                    self.dialogHorizontalPadding = v
+                }
+                if let v = Self.cg(dialog["gapAboveMarker"]) {
+                    self.dialogGapAboveMarker = v
+                }
+                if let v = Self.cg(dialog["marqueeSpeed"]) {
+                    self.dialogMarqueeSpeed = max(1, v)
+                }
+            }
+        }
     }
 
     /// Style-only annotation used to render [MKUserLocation] as a Dopin marker.
@@ -406,7 +460,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
     
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
-        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature
+        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature && lhs.markerDialogSignature == rhs.markerDialogSignature
     }
     
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {

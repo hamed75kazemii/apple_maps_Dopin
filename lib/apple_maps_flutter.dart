@@ -20,6 +20,7 @@ part 'src/dopin_marker.dart';
 part 'src/my_location_marker.dart';
 part 'src/svg_marker.dart';
 part 'src/card_marker.dart';
+part 'src/marker_dialog.dart';
 part 'src/annotation_updates.dart';
 part 'src/apple_map.dart';
 part 'src/apple_poi_detail.dart';

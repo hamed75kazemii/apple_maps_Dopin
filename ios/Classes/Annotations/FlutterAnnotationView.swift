@@ -549,6 +549,195 @@ enum DopinMarkerImageLoader {
     }
 }
 
+// MARK: - Marker dialog bubble (pill + tail + RTL marquee)
+
+/// Pill dialog above Dopin / SVG markers. Fixed width; overflows scroll R→L with a
+/// right-edge fade (feed-style marquee).
+enum MarkerDialogBubbleBuilder {
+
+    private static let tailWidth: CGFloat = 24
+    private static let tailHeight: CGFloat = 10
+    private static let fadeFraction: CGFloat = 0.28
+    private static let loopGap: CGFloat = 28
+    private static let marqueeKey = "markerDialogMarquee"
+
+    static func wrapIfNeeded(markerContent: UIView, annotation: FlutterAnnotation) -> UIView {
+        guard annotation.usesMarkerDialog else { return markerContent }
+
+        let bubble = buildBubble(annotation: annotation)
+        let gap = annotation.dialogGapAboveMarker
+        let markerSize = markerContent.bounds.size
+        let bubbleSize = bubble.bounds.size
+
+        let totalWidth = max(bubbleSize.width, markerSize.width)
+        let totalHeight = bubbleSize.height + gap + markerSize.height
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
+        container.backgroundColor = .clear
+        container.clipsToBounds = false
+
+        bubble.frame.origin = CGPoint(
+            x: (totalWidth - bubbleSize.width) / 2,
+            y: 0
+        )
+        container.addSubview(bubble)
+
+        markerContent.frame.origin = CGPoint(
+            x: (totalWidth - markerSize.width) / 2,
+            y: bubbleSize.height + gap
+        )
+        container.addSubview(markerContent)
+
+        container.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: totalHeight))
+        return container
+    }
+
+    private static func buildBubble(annotation: FlutterAnnotation) -> UIView {
+        let width = annotation.dialogWidth
+        let height = annotation.dialogHeight
+        let totalHeight = height + tailHeight
+        let hPad = annotation.dialogHorizontalPadding
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: totalHeight))
+        container.backgroundColor = .clear
+        container.clipsToBounds = false
+        container.isUserInteractionEnabled = false
+
+        let bgLayer = CAShapeLayer()
+        bgLayer.path = bubblePath(width: width, bodyHeight: height).cgPath
+        bgLayer.fillColor = annotation.dialogBackgroundColor.cgColor
+        container.layer.insertSublayer(bgLayer, at: 0)
+
+        let textWidth = max(0, width - hPad * 2)
+        let textContainer = UIView(frame: CGRect(x: hPad, y: 0, width: textWidth, height: height))
+        textContainer.clipsToBounds = true
+        textContainer.backgroundColor = .clear
+        container.addSubview(textContainer)
+
+        let font = roundedFont(size: annotation.dialogFontSize)
+        let text = annotation.dialogText
+        let measured = (text as NSString).size(withAttributes: [.font: font])
+        let labelHeight = ceil(font.lineHeight)
+        let labelY = (height - labelHeight) / 2
+        let needsMarquee = measured.width > textWidth + 0.5
+
+        if needsMarquee {
+            installMarquee(
+                in: textContainer,
+                text: text,
+                font: font,
+                textColor: annotation.dialogTextColor,
+                labelHeight: labelHeight,
+                labelY: labelY,
+                textWidth: measured.width,
+                speed: annotation.dialogMarqueeSpeed
+            )
+        } else {
+            let label = UILabel(frame: CGRect(x: 0, y: labelY, width: textWidth, height: labelHeight))
+            label.text = text
+            label.font = font
+            label.textColor = annotation.dialogTextColor
+            label.textAlignment = .left
+            label.lineBreakMode = .byClipping
+            textContainer.addSubview(label)
+        }
+
+        applyRightFadeMask(to: textContainer)
+        return container
+    }
+
+    private static func installMarquee(
+        in container: UIView,
+        text: String,
+        font: UIFont,
+        textColor: UIColor,
+        labelHeight: CGFloat,
+        labelY: CGFloat,
+        textWidth: CGFloat,
+        speed: CGFloat
+    ) {
+        let travel = textWidth + loopGap
+        let strip = UIView(frame: CGRect(x: 0, y: 0, width: travel * 2, height: container.bounds.height))
+        strip.backgroundColor = .clear
+
+        func makeLabel(x: CGFloat) -> UILabel {
+            let label = UILabel(frame: CGRect(x: x, y: labelY, width: ceil(textWidth), height: labelHeight))
+            label.text = text
+            label.font = font
+            label.textColor = textColor
+            label.lineBreakMode = .byClipping
+            return label
+        }
+
+        strip.addSubview(makeLabel(x: 0))
+        strip.addSubview(makeLabel(x: travel))
+        container.addSubview(strip)
+
+        // Continuous R→L scroll; duplicated label keeps the loop seamless.
+        let duration = Double(travel) / Double(max(speed, 1))
+        let animation = CABasicAnimation(keyPath: "transform.translation.x")
+        animation.fromValue = 0
+        animation.toValue = -travel
+        animation.duration = max(duration, 0.1)
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.isRemovedOnCompletion = false
+        strip.layer.add(animation, forKey: marqueeKey)
+    }
+
+    private static func applyRightFadeMask(to view: UIView) {
+        let mask = CAGradientLayer()
+        mask.frame = view.bounds
+        mask.startPoint = CGPoint(x: 0, y: 0.5)
+        mask.endPoint = CGPoint(x: 1, y: 0.5)
+        let opaque = UIColor.black.cgColor
+        let clear = UIColor.clear.cgColor
+        let fadeStart = max(0, 1 - fadeFraction)
+        mask.colors = [opaque, opaque, clear]
+        mask.locations = [0, NSNumber(value: Double(fadeStart)), 1]
+        view.layer.mask = mask
+    }
+
+    private static func bubblePath(width: CGFloat, bodyHeight: CGFloat) -> UIBezierPath {
+        let r = bodyHeight / 2
+        let path = UIBezierPath()
+        let midX = width / 2
+        let halfTail = tailWidth / 2
+
+        path.move(to: CGPoint(x: r, y: 0))
+        path.addLine(to: CGPoint(x: width - r, y: 0))
+        path.addArc(
+            withCenter: CGPoint(x: width - r, y: r),
+            radius: r,
+            startAngle: -.pi / 2,
+            endAngle: .pi / 2,
+            clockwise: true
+        )
+        path.addLine(to: CGPoint(x: midX + halfTail, y: bodyHeight))
+        path.addLine(to: CGPoint(x: midX, y: bodyHeight + tailHeight))
+        path.addLine(to: CGPoint(x: midX - halfTail, y: bodyHeight))
+        path.addLine(to: CGPoint(x: r, y: bodyHeight))
+        path.addArc(
+            withCenter: CGPoint(x: r, y: r),
+            radius: r,
+            startAngle: .pi / 2,
+            endAngle: -.pi / 2,
+            clockwise: true
+        )
+        path.close()
+        return path
+    }
+
+    private static func roundedFont(size: CGFloat) -> UIFont {
+        if let descriptor = UIFont.systemFont(ofSize: size, weight: .regular)
+            .fontDescriptor
+            .withDesign(.rounded) {
+            return UIFont(descriptor: descriptor, size: size)
+        }
+        return UIFont.systemFont(ofSize: size, weight: .regular)
+    }
+}
+
 final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
 
     private static let contentTag = 8_441_001
@@ -819,28 +1008,30 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         let hasFallbackImage = annotation.dopinImagePngData != nil || annotation.dopinImageAssetName != nil
         let imageCount = urlCount > 0 ? urlCount : (hasFallbackImage ? 1 : 1)
 
+        let marker: UIView
         if imageCount <= 1 {
-            return buildSingleImageMarker(annotation: annotation)
-        }
+            marker = buildSingleImageMarker(annotation: annotation)
+        } else {
+            var memberCount = imageCount
+            if let count = annotation.dopinMarkerCount, count > memberCount {
+                memberCount = count
+            }
 
-        var memberCount = imageCount
-        if let count = annotation.dopinMarkerCount, count > memberCount {
-            memberCount = count
+            let previewSlots = min(3, imageCount)
+            let stackContent = ClusterStackMarkerBuilder.buildContent(
+                memberCount: memberCount,
+                previewSlots: previewSlots,
+                imageTagBase: imageTagBase
+            )
+            marker = wrapMarkerWithBadge(
+                frameView: stackContent,
+                frameW: ClusterStackMarkerBuilder.totalWidth,
+                frameH: stackContent.bounds.height,
+                annotation: annotation,
+                suppressCountBadge: memberCount > previewSlots
+            )
         }
-
-        let previewSlots = min(3, imageCount)
-        let stackContent = ClusterStackMarkerBuilder.buildContent(
-            memberCount: memberCount,
-            previewSlots: previewSlots,
-            imageTagBase: imageTagBase
-        )
-        return wrapMarkerWithBadge(
-            frameView: stackContent,
-            frameW: ClusterStackMarkerBuilder.totalWidth,
-            frameH: stackContent.bounds.height,
-            annotation: annotation,
-            suppressCountBadge: memberCount > previewSlots
-        )
+        return MarkerDialogBubbleBuilder.wrapIfNeeded(markerContent: marker, annotation: annotation)
     }
 
     private static func buildSingleImageMarker(annotation: FlutterAnnotation) -> UIView {
@@ -1210,7 +1401,7 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
         container.addSubview(avatarView)
 
         container.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
-        return container
+        return MarkerDialogBubbleBuilder.wrapIfNeeded(markerContent: container, annotation: annotation)
     }
 }
 

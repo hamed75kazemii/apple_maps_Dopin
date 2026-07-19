@@ -534,6 +534,16 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.cardSubtitleFontSize = annotation.cardSubtitleFontSize
                 oldAnnotation.cardDistanceFontSize = annotation.cardDistanceFontSize
                 oldAnnotation.cardMaxWidth = annotation.cardMaxWidth
+                oldAnnotation.usesMarkerDialog = annotation.usesMarkerDialog
+                oldAnnotation.dialogText = annotation.dialogText
+                oldAnnotation.dialogWidth = annotation.dialogWidth
+                oldAnnotation.dialogHeight = annotation.dialogHeight
+                oldAnnotation.dialogBackgroundColor = annotation.dialogBackgroundColor
+                oldAnnotation.dialogTextColor = annotation.dialogTextColor
+                oldAnnotation.dialogFontSize = annotation.dialogFontSize
+                oldAnnotation.dialogHorizontalPadding = annotation.dialogHorizontalPadding
+                oldAnnotation.dialogGapAboveMarker = annotation.dialogGapAboveMarker
+                oldAnnotation.dialogMarqueeSpeed = annotation.dialogMarqueeSpeed
                 oldAnnotation.glow = annotation.glow
                 oldAnnotation.glowColorArgb = annotation.glowColorArgb
                 oldAnnotation.glowIntensity = annotation.glowIntensity

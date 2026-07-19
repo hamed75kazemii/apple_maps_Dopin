@@ -163,6 +163,7 @@ class Annotation {
     this.dopinMarker,
     this.svgMarker,
     this.cardMarker,
+    this.dialog,
     this.scaleInOnAdd = false,
     this.scaleOutOnHide = false,
   })  : assert(0.0 <= alpha && alpha <= 1.0),
@@ -245,6 +246,12 @@ class Annotation {
   /// card tail points down at [position], so use `anchor: Offset(0.5, 1.0)`.
   final CardMarker? cardMarker;
 
+  /// Optional pill dialog shown above a [dopinMarker] or [svgMarker] (iOS).
+  ///
+  /// Presence enables the bubble; empty [MarkerDialog.text] hides it. Fixed
+  /// width with right-to-left marquee when the text overflows.
+  final MarkerDialog? dialog;
+
   /// When true (iOS), the marker plays a spring scale-in animation when first added.
   final bool scaleInOnAdd;
 
@@ -273,6 +280,7 @@ class Annotation {
     DopinMarker? dopinMarkerParam,
     SvgMarker? svgMarkerParam,
     CardMarker? cardMarkerParam,
+    MarkerDialog? dialogParam,
     bool? scaleInOnAddParam,
     bool? scaleOutOnHideParam,
   }) {
@@ -296,6 +304,7 @@ class Annotation {
       dopinMarker: dopinMarkerParam ?? dopinMarker,
       svgMarker: svgMarkerParam ?? svgMarker,
       cardMarker: cardMarkerParam ?? cardMarker,
+      dialog: dialogParam ?? dialog,
       scaleInOnAdd: scaleInOnAddParam ?? scaleInOnAdd,
       scaleOutOnHide: scaleOutOnHideParam ?? scaleOutOnHide,
     );
@@ -337,6 +346,9 @@ class Annotation {
     if (cardMarker != null) {
       json['cardMarker'] = cardMarker!._toJson();
     }
+    if (dialog != null) {
+      json['dialog'] = dialog!._toJson();
+    }
     json['scaleInOnAdd'] = scaleInOnAdd;
     json['scaleOutOnHide'] = scaleOutOnHide;
     return json;
@@ -364,6 +376,7 @@ class Annotation {
         dopinMarker == typedOther.dopinMarker &&
         svgMarker == typedOther.svgMarker &&
         cardMarker == typedOther.cardMarker &&
+        dialog == typedOther.dialog &&
         scaleInOnAdd == typedOther.scaleInOnAdd &&
         scaleOutOnHide == typedOther.scaleOutOnHide;
   }
@@ -387,6 +400,7 @@ class Annotation {
         dopinMarker,
         svgMarker,
         cardMarker,
+        dialog,
         Object.hash(scaleInOnAdd, scaleOutOnHide),
       );
 

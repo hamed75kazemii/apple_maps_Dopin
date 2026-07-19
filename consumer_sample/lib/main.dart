@@ -155,6 +155,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _singleImageMarker,
+        dialog: const MarkerDialog(
+          text: '1 Market Street San Francisco California',
+        ),
       ),
       Annotation(
         annotationId: const AnnotationId('dopin_stack_2'),
@@ -164,6 +167,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
         scaleOutOnHide: true,
         shadow: _demoShadow,
         dopinMarker: _dualImageMarker,
+        dialog: const MarkerDialog(text: '1 Market Street San Fran'),
       ),
       Annotation(
         annotationId: const AnnotationId('dopin_stack_3'),
@@ -237,8 +241,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   late final List<Annotation> _pendingMarkers = _dopinStackCountDemos()
       .toList();
   int _revealedMarkerCount = 0;
-  int _hiddenMarkerCount = 0;
-  bool _isHidingMarkers = false;
   Timer? _markerRevealTimer;
 
   @override
@@ -260,9 +262,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     if (_revealedMarkerCount >= _pendingMarkers.length) {
       _markerRevealTimer?.cancel();
       _markerRevealTimer = null;
-      if (!mounted) return;
-      setState(() => _status = 'همه ۵ مارکر نمایش داده شد — شروع مخفی‌سازی…');
-      _startMarkerHide();
+      if (mounted) {
+        setState(() => _status = 'همه ۵ مارکر نمایش داده شد');
+      }
       return;
     }
 
@@ -274,40 +276,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       _revealedMarkerCount++;
       _status =
           'مارکر $_revealedMarkerCount از ${_pendingMarkers.length} ظاهر شد';
-    });
-  }
-
-  void _startMarkerHide() {
-    if (_isHidingMarkers) return;
-    _isHidingMarkers = true;
-    _hiddenMarkerCount = 0;
-    _hideNextMarker();
-    _markerRevealTimer = Timer.periodic(_markerRevealInterval, (_) {
-      _hideNextMarker();
-    });
-  }
-
-  void _hideNextMarker() {
-    if (_hiddenMarkerCount >= _pendingMarkers.length) {
-      _markerRevealTimer?.cancel();
-      _markerRevealTimer = null;
-      if (mounted) {
-        setState(() => _status = 'همه مارکرها با انیمیشن مخفی شدند');
-      }
-      return;
-    }
-
-    if (!mounted) return;
-    final targetId = _pendingMarkers[_hiddenMarkerCount].annotationId;
-
-    setState(() {
-      _annotations = _annotations.map((annotation) {
-        if (annotation.annotationId != targetId) return annotation;
-        return annotation.copyWith(visibleParam: false);
-      }).toSet();
-      _hiddenMarkerCount++;
-      _status =
-          'مارکر $_hiddenMarkerCount از ${_pendingMarkers.length} مخفی شد';
     });
   }
 
