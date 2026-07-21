@@ -52,152 +52,37 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   Completer<void>? _cameraIdleCompleter;
 
   static const Duration _focusFlyDuration = Duration(milliseconds: 420);
-  static const Duration _markerRevealInterval = Duration(seconds: 2);
+  static const Duration _dialogMarkerDelay = Duration(seconds: 1);
 
-  static const LatLng _multiDopinDemoCenter = LatLng(34.0530, -118.2420);
+  static const LatLng _dialogMarkerPosition = LatLng(34.0530, -118.2420);
 
   static const CameraPosition _losAngeles = CameraPosition(
-    target: _multiDopinDemoCenter,
+    target: _dialogMarkerPosition,
     zoom: 16,
     pitch: 60,
   );
 
-  static const List<String> _demoGroupUrls = <String>[
-    'https://i.pravatar.cc/150?img=1',
-    //  'https://i.pravatar.cc/150?img=2',
-    // 'https://i.pravatar.cc/150?img=3',
-    // 'https://i.pravatar.cc/150?img=4',
-  ];
-  static const List<String> _demoDualUrls = <String>[
-    'https://i.pravatar.cc/150?img=1',
-    //  'https://i.pravatar.cc/150?img=2',
-  ];
-  static const List<String> _demoTripleUrls = <String>[
-    'https://i.pravatar.cc/150?img=1',
-    //  'https://i.pravatar.cc/150?img=2',
-    // 'https://i.pravatar.cc/150?img=3',
-  ];
   static const Color _labelColor = Color(0xFF7B2CBF);
-  static const List<Color> _labelGradientColors = <Color>[
-    Color(0xFFEC30E4),
-    Color(0xFF581DFF),
-  ];
   static const MarkerShadow _demoShadow = MarkerShadow();
 
-  static const DopinMarker _singleImageMarker = DopinMarker(
-    imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
-    width: 46,
-    height: 46,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderRadius: 12,
-    labelColor: _labelColor,
+  static final Annotation _dialogDemoMarker = Annotation(
+    annotationId: const AnnotationId('dialog_demo'),
+    position: _dialogMarkerPosition,
+    onTap: () {},
+    shadow: _demoShadow,
+    dopinMarker: const DopinMarker(
+      imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
+      width: 46,
+      height: 46,
+      borderWidth: 3,
+      borderColor: Colors.white,
+      borderRadius: 12,
+      labelColor: _labelColor,
+    ),
+    dialog: const MarkerDialog(
+      text: '1 Market Street San Francisco California',
+    ),
   );
-
-  static const DopinMarker _dualImageMarker = DopinMarker(
-    imageUrls: _demoDualUrls,
-    // count: 3,
-    //   label: '2',
-    width: 46,
-    height: 46,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderRadius: 12,
-    labelColor: _labelColor,
-  );
-
-  static const DopinMarker _tripleImageMarker = DopinMarker(
-    imageUrls: _demoTripleUrls,
-    // label: '3',
-    width: 46,
-    height: 46,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderRadius: 12,
-    labelColor: _labelColor,
-  );
-
-  static const DopinMarker _quadImageMarker = DopinMarker(
-    imageUrls: _demoGroupUrls,
-    width: 46,
-    height: 46,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderRadius: 12,
-    labelColor: _labelColor,
-  );
-
-  static const DopinMarker _fiveDopinMarker = DopinMarker(
-    imageUrls: _demoGroupUrls,
-    count: 5,
-    width: 46,
-    height: 46,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderRadius: 12,
-    labelColor: _labelColor,
-  );
-
-  /// 1–5 Dopin stack layouts in a row for side-by-side comparison.
-  static Set<Annotation> _dopinStackCountDemos() {
-    const LatLng center = _multiDopinDemoCenter;
-    const double spacing = 0.0012;
-
-    LatLng slot(int index) =>
-        LatLng(center.latitude, center.longitude + (index - 2) * spacing);
-
-    return <Annotation>{
-      Annotation(
-        annotationId: const AnnotationId('dopin_stack_1'),
-        position: slot(0),
-        onTap: () {},
-        scaleInOnAdd: true,
-        scaleOutOnHide: true,
-        shadow: _demoShadow,
-        dopinMarker: _singleImageMarker,
-        dialog: const MarkerDialog(
-          text: '1 Market Street San Francisco California',
-        ),
-      ),
-      Annotation(
-        annotationId: const AnnotationId('dopin_stack_2'),
-        position: slot(1),
-        onTap: () {},
-        scaleInOnAdd: true,
-        scaleOutOnHide: true,
-        shadow: _demoShadow,
-        dopinMarker: _dualImageMarker,
-        dialog: const MarkerDialog(text: '1 Market Street San Fran'),
-      ),
-      Annotation(
-        annotationId: const AnnotationId('dopin_stack_3'),
-        position: slot(2),
-        onTap: () {},
-        scaleInOnAdd: true,
-        scaleOutOnHide: true,
-        shadow: _demoShadow,
-        dopinMarker: _tripleImageMarker,
-      ),
-      Annotation(
-        annotationId: const AnnotationId('dopin_stack_4'),
-        position: slot(3),
-        onTap: () {},
-        scaleInOnAdd: true,
-        scaleOutOnHide: true,
-        shadow: _demoShadow,
-        dopinMarker: _quadImageMarker,
-      ),
-      Annotation(
-        annotationId: const AnnotationId('dopin_stack_5'),
-        position: slot(4),
-        onTap: () {},
-        scaleInOnAdd: true,
-        scaleOutOnHide: true,
-        shadow: _demoShadow,
-        dopinMarker: _fiveDopinMarker,
-      ),
-    };
-  }
 
   static const double _focusPitchMin = 50;
   static const double _focusPitchMax = 60;
@@ -205,83 +90,30 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   static const double _focusOrbitDegreesPerSecond = 10;
   static const double _minFocusZoom = 17;
 
-  /// Dense markers around downtown LA to exercise native MapKit clustering.
-  static Set<Annotation> _clusterDemoAnnotations() {
-    const double baseLat = 34.0522;
-    const double baseLng = -118.2437;
-    final Set<Annotation> markers = <Annotation>{};
-    for (int index = 0; index < 16; index++) {
-      final int row = index ~/ 4;
-      final int col = index % 4;
-      final double lat = baseLat + (row - 1.5) * 0.00035;
-      final double lng = baseLng + (col - 1.5) * 0.00035;
-      markers.add(
-        Annotation(
-          annotationId: AnnotationId('cluster_demo_$index'),
-          position: LatLng(lat, lng),
-          onTap: () {},
-          shadow: _demoShadow,
-          dopinMarker: DopinMarker(
-            imageUrls: <String>['https://i.pravatar.cc/150?img=${index + 1}'],
-            width: 40,
-            height: 40,
-            borderWidth: 3,
-            borderColor: Colors.white,
-            borderRadius: 12,
-          ),
-        ),
-      );
-    }
-    return markers;
-  }
-
   bool get _isFocused => _focusedPoi != null;
 
   Set<Annotation> _annotations = <Annotation>{};
-  late final List<Annotation> _pendingMarkers = _dopinStackCountDemos()
-      .toList();
-  int _revealedMarkerCount = 0;
-  Timer? _markerRevealTimer;
+  Timer? _dialogMarkerTimer;
 
   @override
   void initState() {
     super.initState();
     _lastCameraPosition = _losAngeles;
-    _status = 'مارکرها هر ۲ ثانیه یکی ظاهر می‌شوند';
-    _startMarkerReveal();
+    _status = 'مارکر دیالوگ بعد از ۱ ثانیه ظاهر می‌شود';
+    _dialogMarkerTimer = Timer(_dialogMarkerDelay, _showDialogMarker);
   }
 
-  void _startMarkerReveal() {
-    _revealNextMarker();
-    _markerRevealTimer = Timer.periodic(_markerRevealInterval, (_) {
-      _revealNextMarker();
-    });
-  }
-
-  void _revealNextMarker() {
-    if (_revealedMarkerCount >= _pendingMarkers.length) {
-      _markerRevealTimer?.cancel();
-      _markerRevealTimer = null;
-      if (mounted) {
-        setState(() => _status = 'همه ۵ مارکر نمایش داده شد');
-      }
-      return;
-    }
-
-    final marker = _pendingMarkers[_revealedMarkerCount];
+  void _showDialogMarker() {
     if (!mounted) return;
-
     setState(() {
-      _annotations = <Annotation>{..._annotations, marker};
-      _revealedMarkerCount++;
-      _status =
-          'مارکر $_revealedMarkerCount از ${_pendingMarkers.length} ظاهر شد';
+      _annotations = <Annotation>{_dialogDemoMarker};
+      _status = 'مارکر دیالوگ نمایش داده شد';
     });
   }
 
   @override
   void dispose() {
-    _markerRevealTimer?.cancel();
+    _dialogMarkerTimer?.cancel();
     _stopFocusOrbit();
     super.dispose();
   }

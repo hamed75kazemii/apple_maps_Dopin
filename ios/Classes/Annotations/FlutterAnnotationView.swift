@@ -558,6 +558,8 @@ enum MarkerDialogBubbleBuilder {
     private static let tailWidth: CGFloat = 24
     private static let tailHeight: CGFloat = 10
     private static let fadeFraction: CGFloat = 0.28
+    /// Softer left-edge fade than the right (feed-style).
+    private static let leftFadeFraction: CGFloat = 0.12
     private static let loopGap: CGFloat = 28
     private static let marqueeKey = "markerDialogMarquee"
 
@@ -642,7 +644,7 @@ enum MarkerDialogBubbleBuilder {
             textContainer.addSubview(label)
         }
 
-        applyRightFadeMask(to: textContainer)
+        applyEdgeFadeMask(to: textContainer)
         return container
     }
 
@@ -685,16 +687,22 @@ enum MarkerDialogBubbleBuilder {
         strip.layer.add(animation, forKey: marqueeKey)
     }
 
-    private static func applyRightFadeMask(to view: UIView) {
+    private static func applyEdgeFadeMask(to view: UIView) {
         let mask = CAGradientLayer()
         mask.frame = view.bounds
         mask.startPoint = CGPoint(x: 0, y: 0.5)
         mask.endPoint = CGPoint(x: 1, y: 0.5)
         let opaque = UIColor.black.cgColor
         let clear = UIColor.clear.cgColor
-        let fadeStart = max(0, 1 - fadeFraction)
-        mask.colors = [opaque, opaque, clear]
-        mask.locations = [0, NSNumber(value: Double(fadeStart)), 1]
+        let leftEnd = min(leftFadeFraction, 0.45)
+        let rightStart = max(0, 1 - fadeFraction)
+        mask.colors = [clear, opaque, opaque, clear]
+        mask.locations = [
+            0,
+            NSNumber(value: Double(leftEnd)),
+            NSNumber(value: Double(rightStart)),
+            1,
+        ]
         view.layer.mask = mask
     }
 
