@@ -62,6 +62,7 @@ class AppleMap extends StatefulWidget {
     this.onLongPress,
     this.onPOITap,
     this.onTrackingModeChanged,
+    this.onMyLocationTap,
     this.snapshotOptions,
     this.insetsLayoutMarginsFromSafeArea = true,
   }) : super(key: key);
@@ -174,6 +175,10 @@ class AppleMap extends StatefulWidget {
   /// Fired when [TrackingMode] changes — including when the user pans/zooms
   /// the map and MapKit exits follow mode automatically.
   final TrackingModeCallback? onTrackingModeChanged;
+
+  /// Called when the custom [myLocationMarker] annotation is tapped (including
+  /// its dialog bubble). Does not fire for the default blue-dot indicator.
+  final VoidCallback? onMyLocationTap;
 
   /// True if a "My Location" layer should be shown on the map.
   ///
@@ -346,7 +351,13 @@ class _AppleMapState extends State<AppleMap> {
     widget.onMapCreated?.call(controller);
   }
 
+  static const String _userLocationAnnotationId = '__user_location__';
+
   void onAnnotationTap(String annotationIdParam) {
+    if (annotationIdParam == _userLocationAnnotationId) {
+      widget.onMyLocationTap?.call();
+      return;
+    }
     final AnnotationId annotationId = AnnotationId(annotationIdParam);
     _annotations[annotationId]?.onTap?.call();
   }

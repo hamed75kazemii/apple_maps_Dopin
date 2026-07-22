@@ -46,6 +46,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         MKMapType.hybrid,
         MKMapType.satelliteFlyover,
         MKMapType.hybridFlyover,
+        MKMapType.mutedStandard,
     ]
 
     /// When true, low zoom levels use a wide region so MapKit renders the 3D globe.
@@ -75,6 +76,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     private static let standardZoomThreshold: Double = 3.5
     private static let standardMapTypeIndex: Int = 0
     private static let hybridFlyoverMapTypeIndex: Int = 4
+    private static let mutedStandardMapTypeIndex: Int = 5
     
     let userTrackingModes: Array<MKUserTrackingMode> = [
         MKUserTrackingMode.none,
@@ -530,6 +532,15 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
                 preferredConfiguration = MKImageryMapConfiguration(elevationStyle: elevation)
             case 4:
                 let config = MKHybridMapConfiguration(elevationStyle: elevation)
+                if let poiFilter = poiFilter {
+                    config.pointOfInterestFilter = poiFilter
+                }
+                preferredConfiguration = config
+            case FlutterMapView.mutedStandardMapTypeIndex:
+                let config = MKStandardMapConfiguration(
+                    elevationStyle: elevation,
+                    emphasisStyle: .muted
+                )
                 if let poiFilter = poiFilter {
                     config.pointOfInterestFilter = poiFilter
                 }

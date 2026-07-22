@@ -21,6 +21,13 @@ enum MapType {
   /// 3D globe when zoomed out; street names and POIs when zoomed in.
   /// Closest to Apple Maps globe — use this instead of [standard] for a round earth.
   hybridFlyover,
+
+  /// Muted street map that deemphasizes MapKit chrome so your markers stand out.
+  ///
+  /// Pair with [AppleMap.showPointsOfInterest] `false` for the cleanest canvas
+  /// (hides cafes/shops/etc.). MapKit still draws some road/city names — there
+  /// is no public API to strip every label.
+  mutedStandard,
 }
 
 /// Controls MapKit terrain and road elevation rendering (iOS 16+).

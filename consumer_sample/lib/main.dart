@@ -386,11 +386,10 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
           children: [
             AppleMap(
               initialCameraPosition: _losAngeles,
-              mapType: MapType.standard,
+              mapType: MapType.mutedStandard,
               elevationStyle: ElevationStyle.realistic,
               clusteringEnabled: true,
-
-              //  showPointsOfInterest: false,
+              showPointsOfInterest: false,
               globeAtMinZoom: true,
               minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
               scrollGesturesEnabled: gesturesEnabled,
