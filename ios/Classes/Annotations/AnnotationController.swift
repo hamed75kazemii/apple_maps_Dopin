@@ -505,7 +505,9 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.dopinLabelFontSize = annotation.dopinLabelFontSize
                 oldAnnotation.dopinBadgeHeight = annotation.dopinBadgeHeight
                 oldAnnotation.dopinLabelColor = annotation.dopinLabelColor
+                oldAnnotation.dopinLabelBackgroundColor = annotation.dopinLabelBackgroundColor
                 oldAnnotation.dopinLabelGradientColors = annotation.dopinLabelGradientColors
+                oldAnnotation.dopinLabelBackgroundGradientColors = annotation.dopinLabelBackgroundGradientColors
                 oldAnnotation.usesSvgMarker = annotation.usesSvgMarker
                 oldAnnotation.svgWidth = annotation.svgWidth
                 oldAnnotation.svgHeight = annotation.svgHeight
@@ -544,6 +546,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.dialogHorizontalPadding = annotation.dialogHorizontalPadding
                 oldAnnotation.dialogGapAboveMarker = annotation.dialogGapAboveMarker
                 oldAnnotation.dialogMarqueeSpeed = annotation.dialogMarqueeSpeed
+                oldAnnotation.dialogStyle = annotation.dialogStyle
                 oldAnnotation.glow = annotation.glow
                 oldAnnotation.glowColorArgb = annotation.glowColorArgb
                 oldAnnotation.glowIntensity = annotation.glowIntensity

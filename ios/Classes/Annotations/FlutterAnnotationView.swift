@@ -551,8 +551,9 @@ enum DopinMarkerImageLoader {
 
 // MARK: - Marker dialog bubble (pill + tail + RTL marquee)
 
-/// Pill dialog above Dopin / SVG markers. Fixed width; overflows scroll R→L with a
-/// right-edge fade (feed-style marquee).
+/// Pill / cloud dialog above Dopin / SVG markers. Fixed width; pill overflows
+/// scroll R→L with a right-edge fade (feed-style marquee). Cloud style uses a
+/// frosted-glass thought bubble (Figma cloud dialog).
 enum MarkerDialogBubbleBuilder {
 
     private static let tailWidth: CGFloat = 24
@@ -562,6 +563,43 @@ enum MarkerDialogBubbleBuilder {
     private static let leftFadeFraction: CGFloat = 0.12
     private static let loopGap: CGFloat = 28
     private static let marqueeKey = "markerDialogMarquee"
+    /// Tag on the marker body inside a dialog wrap (shadow must not hit the glass).
+    static let markerBodyTag = 8_441_090
+
+    /// Design reference size for the cloud body path (Figma Union 68×49).
+    private static let cloudDesignWidth: CGFloat = 68
+    private static let cloudDesignHeight: CGFloat = 49
+    /// Detached thought-dot diameter in design coords.
+    private static let cloudDotDesignSize: CGFloat = 10
+    private static let cloudDotGapDesign: CGFloat = 1
+    private static let cloudMaxCharacters = 40
+    private static let cloudMaxCharactersPerLine = 20
+
+    /// Clamp to 40 graphemes and hard-wrap every 20 characters.
+    private static func clampCloudDialogText(_ text: String) -> String {
+        // Strip soft breaks from Dart without inserting spaces (would shift the 20-char grid).
+        let withoutBreaks = text.replacingOccurrences(of: "\n", with: "")
+        let cleaned = withoutBreaks
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return cleaned }
+
+        var chars: [Character] = []
+        for ch in cleaned {
+            if chars.count >= cloudMaxCharacters { break }
+            chars.append(ch)
+        }
+        guard !chars.isEmpty else { return "" }
+
+        var lines: [String] = []
+        var index = 0
+        while index < chars.count {
+            let end = min(index + cloudMaxCharactersPerLine, chars.count)
+            lines.append(String(chars[index..<end]))
+            index = end
+        }
+        return lines.joined(separator: "\n")
+    }
 
     static func wrapIfNeeded(markerContent: UIView, annotation: FlutterAnnotation) -> UIView {
         guard annotation.usesMarkerDialog else { return markerContent }
@@ -572,29 +610,42 @@ enum MarkerDialogBubbleBuilder {
         let bubbleSize = bubble.bounds.size
 
         let totalWidth = max(bubbleSize.width, markerSize.width)
-        let totalHeight = bubbleSize.height + gap + markerSize.height
+        // gap may be negative (cloud thought-dot overlaps the marker).
+        let rawMarkerY = bubbleSize.height + gap
+        let bubbleY: CGFloat = rawMarkerY < 0 ? -rawMarkerY : 0
+        let markerY = max(0, rawMarkerY)
+        let totalHeight = max(bubbleY + bubbleSize.height, markerY + markerSize.height)
 
         let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
         container.backgroundColor = .clear
         container.clipsToBounds = false
 
-        bubble.frame.origin = CGPoint(
-            x: (totalWidth - bubbleSize.width) / 2,
-            y: 0
-        )
-        container.addSubview(bubble)
-
+        // Marker under the bubble so the thought-dot stays visible on top.
+        markerContent.tag = markerBodyTag
         markerContent.frame.origin = CGPoint(
             x: (totalWidth - markerSize.width) / 2,
-            y: bubbleSize.height + gap
+            y: markerY
         )
         container.addSubview(markerContent)
+
+        bubble.frame.origin = CGPoint(
+            x: (totalWidth - bubbleSize.width) / 2,
+            y: bubbleY
+        )
+        container.addSubview(bubble)
 
         container.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: totalHeight))
         return container
     }
 
     private static func buildBubble(annotation: FlutterAnnotation) -> UIView {
+        if annotation.dialogStyle == "cloud" {
+            return buildCloudBubble(annotation: annotation)
+        }
+        return buildPillBubble(annotation: annotation)
+    }
+
+    private static func buildPillBubble(annotation: FlutterAnnotation) -> UIView {
         let width = annotation.dialogWidth
         let height = annotation.dialogHeight
         let totalHeight = height + tailHeight
@@ -646,6 +697,274 @@ enum MarkerDialogBubbleBuilder {
 
         applyEdgeFadeMask(to: textContainer)
         return container
+    }
+
+    /// Frosted-glass cloud thought bubble (Figma Group 809 / Union path).
+    /// Body size fits the text (unless the caller set an explicit width/height > 0).
+    private static func buildCloudBubble(annotation: FlutterAnnotation) -> UIView {
+        let text = clampCloudDialogText(annotation.dialogText)
+        let font = roundedFont(size: annotation.dialogFontSize)
+        let hPad = max(2, annotation.dialogHorizontalPadding)
+        let vPad: CGFloat = 5
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineSpacing = 1
+        paragraph.paragraphSpacing = 0
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: annotation.dialogTextColor,
+            .paragraphStyle: paragraph,
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attrs)
+
+        let measured = measureCloudText(
+            attributed: attributed,
+            font: font,
+            explicitWidth: annotation.dialogWidth,
+            explicitHeight: annotation.dialogHeight,
+            hPad: hPad,
+            vPad: vPad
+        )
+        let width = measured.cloudSize.width
+        let height = measured.cloudSize.height
+        let textWidth = measured.textSize.width
+        let textHeight = measured.textSize.height
+
+        let sx = width / cloudDesignWidth
+        let sy = height / cloudDesignHeight
+        let scale = min(sx, sy)
+        let dotSize = cloudDotDesignSize * scale
+        let dotGap = cloudDotGapDesign * scale
+        let totalHeight = height + dotGap + dotSize
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: totalHeight))
+        container.backgroundColor = .clear
+        container.clipsToBounds = false
+        container.isUserInteractionEnabled = false
+
+        let cloudPath = cloudBodyPath(width: width, height: height)
+        let cloudGlass = makeGlassView(
+            path: cloudPath,
+            bounds: CGRect(x: 0, y: 0, width: width, height: height),
+            tint: annotation.dialogBackgroundColor
+        )
+        container.addSubview(cloudGlass)
+
+        let lobeReserve = height * (6.0 / cloudDesignHeight)
+        let textTop = max(vPad, (height - lobeReserve - textHeight) / 2)
+        let textContainer = UIView(frame: CGRect(
+            x: hPad,
+            y: textTop,
+            width: textWidth,
+            height: textHeight
+        ))
+        textContainer.backgroundColor = .clear
+        textContainer.clipsToBounds = false
+        textContainer.isUserInteractionEnabled = false
+        container.addSubview(textContainer)
+
+        let label = UILabel(frame: textContainer.bounds)
+        label.attributedText = attributed
+        label.textAlignment = .center
+        label.numberOfLines = 3
+        label.lineBreakMode = .byWordWrapping
+        label.adjustsFontSizeToFitWidth = false
+        label.preferredMaxLayoutWidth = textWidth
+        textContainer.addSubview(label)
+
+        let dotRect = CGRect(
+            x: (width - dotSize) / 2,
+            y: height + dotGap,
+            width: dotSize,
+            height: dotSize
+        )
+        let dotPath = UIBezierPath(ovalIn: CGRect(origin: .zero, size: dotRect.size))
+        let dotGlass = makeGlassView(
+            path: dotPath,
+            bounds: CGRect(origin: .zero, size: dotRect.size),
+            tint: annotation.dialogBackgroundColor
+        )
+        dotGlass.frame = dotRect
+        container.addSubview(dotGlass)
+        container.bringSubviewToFront(textContainer)
+
+        return container
+    }
+
+    private struct CloudTextLayout {
+        let textSize: CGSize
+        let cloudSize: CGSize
+    }
+
+    /// Sizes the cloud to the text. `explicitWidth` / `explicitHeight` > 0 pin that axis.
+    private static func measureCloudText(
+        attributed: NSAttributedString,
+        font: UIFont,
+        explicitWidth: CGFloat,
+        explicitHeight: CGFloat,
+        hPad: CGFloat,
+        vPad: CGFloat
+    ) -> CloudTextLayout {
+        let minTextWidth: CGFloat = 36
+        let ns = attributed.string as NSString
+        let attrs: [NSAttributedString.Key: Any]
+        if attributed.length > 0 {
+            attrs = attributed.attributes(at: 0, effectiveRange: nil)
+        } else {
+            attrs = [.font: font]
+        }
+
+        // Text is already hard-wrapped (20 chars/line); measure as-is.
+        let fitted = ns.boundingRect(
+            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: font.lineHeight * 4),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs,
+            context: nil
+        )
+
+        var textWidth = max(minTextWidth, ceil(fitted.width))
+        var textHeight = max(ceil(font.lineHeight), ceil(fitted.height))
+        textHeight = min(textHeight, ceil(font.lineHeight * 3))
+
+        if explicitWidth > 0 {
+            textWidth = max(minTextWidth, explicitWidth - hPad * 2)
+            let wrapped = ns.boundingRect(
+                with: CGSize(width: textWidth, height: font.lineHeight * 4),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: attrs,
+                context: nil
+            )
+            textHeight = min(ceil(wrapped.height), ceil(font.lineHeight * 3))
+        }
+
+        var cloudW = ceil(textWidth + hPad * 2)
+        var cloudH = ceil(textHeight + vPad * 2 + max(6, textHeight * 0.18))
+        cloudW = max(cloudW, 52)
+        cloudH = max(cloudH, 36)
+
+        if explicitWidth > 0 { cloudW = explicitWidth }
+        if explicitHeight > 0 { cloudH = explicitHeight }
+
+        let finalTextW = max(minTextWidth, cloudW - hPad * 2)
+        let lobeReserve = cloudH * (6.0 / cloudDesignHeight)
+        let finalTextH = min(textHeight, max(ceil(font.lineHeight), cloudH - lobeReserve - vPad))
+
+        return CloudTextLayout(
+            textSize: CGSize(width: finalTextW, height: finalTextH),
+            cloudSize: CGSize(width: cloudW, height: cloudH)
+        )
+    }
+
+    private static func makeGlassView(
+        path: UIBezierPath,
+        bounds: CGRect,
+        tint: UIColor
+    ) -> UIView {
+        // Host must stay fully opaque and unmasked — any superview mask/alpha
+        // on UIVisualEffectView kills live backdrop blur (Apple docs).
+        let host = UIView(frame: bounds)
+        host.backgroundColor = .clear
+        host.clipsToBounds = false
+        host.isUserInteractionEnabled = false
+
+        // Shadow as a sibling shape (not on the blur's superview layer).
+        let shadowLayer = CAShapeLayer()
+        shadowLayer.frame = bounds
+        shadowLayer.path = path.cgPath
+        shadowLayer.fillColor = UIColor.clear.cgColor
+        shadowLayer.shadowColor = UIColor.black.cgColor
+        shadowLayer.shadowOpacity = 0.15
+        shadowLayer.shadowOffset = CGSize(width: 0, height: 4)
+        shadowLayer.shadowRadius = 9
+        shadowLayer.shadowPath = path.cgPath
+        host.layer.addSublayer(shadowLayer)
+
+        // `.light` samples the map more clearly than system materials, which look
+        // chalky/opaque on large shapes (the small thought-dot was fine either way).
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .light))
+        blur.frame = bounds
+        blur.isUserInteractionEnabled = false
+
+        let tintView = UIView(frame: blur.contentView.bounds)
+        tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        tintView.backgroundColor = tint
+        blur.contentView.addSubview(tintView)
+
+        // Complex cloud paths break when maskView itself uses layer.mask (nested).
+        // Rasterize the path to an image mask — same technique for body + dot.
+        blur.mask = makePathImageMaskView(path: path, bounds: bounds)
+
+        host.addSubview(blur)
+
+        let border = CAShapeLayer()
+        border.frame = bounds
+        border.path = path.cgPath
+        border.fillColor = UIColor.clear.cgColor
+        border.strokeColor = UIColor.white.withAlphaComponent(0.55).cgColor
+        border.lineWidth = 1
+        host.layer.addSublayer(border)
+
+        return host
+    }
+
+    /// Opaque white silhouette used as `UIVisualEffectView.mask` (alpha = visibility).
+    private static func makePathImageMaskView(path: UIBezierPath, bounds: CGRect) -> UIView {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        format.scale = UIScreen.main.scale
+        let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { _ in
+            UIColor.clear.setFill()
+            UIRectFill(CGRect(origin: .zero, size: bounds.size))
+            UIColor.white.setFill()
+            path.fill()
+        }
+        let imageView = UIImageView(image: image)
+        imageView.frame = bounds
+        imageView.backgroundColor = .clear
+        imageView.isUserInteractionEnabled = false
+        return imageView
+    }
+
+    private static func applyDialogShadow(to view: UIView, path: UIBezierPath) {
+        // Kept for pill dialog; cloud glass uses a sibling shadow layer instead
+        // so UIVisualEffectView is not forced into an offscreen pass.
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.15
+        view.layer.shadowOffset = CGSize(width: 0, height: 4)
+        view.layer.shadowRadius = 9
+        view.layer.shadowPath = path.cgPath
+        view.layer.masksToBounds = false
+    }
+
+    /// Cloud body path from Figma Union, scaled into [width]×[height].
+    /// Design coords: content box 68×49 (SVG path inset x+4).
+    private static func cloudBodyPath(width: CGFloat, height: CGFloat) -> UIBezierPath {
+        let sx = width / cloudDesignWidth
+        let sy = height / cloudDesignHeight
+
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: x * sx, y: y * sy)
+        }
+
+        // Path translated from SVG (x − 4): rounded rect + bottom thought lobe.
+        let path = UIBezierPath()
+        path.move(to: p(52, 0))
+        path.addCurve(to: p(68, 16), controlPoint1: p(60.8366, 0), controlPoint2: p(68, 7.16344))
+        path.addLine(to: p(68, 27))
+        path.addCurve(to: p(52, 43), controlPoint1: p(68, 35.8366), controlPoint2: p(60.8366, 43))
+        path.addLine(to: p(45.7402, 43))
+        path.addCurve(to: p(33, 49), controlPoint1: p(44.5358, 46.4234), controlPoint2: p(39.2893, 49))
+        path.addCurve(to: p(20.2598, 43), controlPoint1: p(26.7107, 49), controlPoint2: p(21.4642, 46.4234))
+        path.addLine(to: p(16, 43))
+        path.addCurve(to: p(0, 27), controlPoint1: p(7.16344, 43), controlPoint2: p(0, 35.8366))
+        path.addLine(to: p(0, 16))
+        path.addCurve(to: p(16, 0), controlPoint1: p(0, 7.16344), controlPoint2: p(7.16344, 0))
+        path.addLine(to: p(52, 0))
+        path.close()
+        return path
     }
 
     private static func installMarquee(
@@ -776,9 +1095,21 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         super.layoutSubviews()
         applyAnnotationIfNeeded(force: false)
         if annotation is MKUserLocation, let style = userLocationStyle {
-            let width = Double(frame.size.width)
-            let height = Double(frame.size.height)
-            if width > 0, height > 0 {
+            let width = frame.size.width
+            let height = frame.size.height
+            guard width > 0, height > 0 else { return }
+            // Prefer live avatar center when a cloud dialog auto-sizes the bubble.
+            if style.usesMarkerDialog,
+               style.dialogStyle == "cloud",
+               let content = viewWithTag(Self.contentTag),
+               let markerBody = content.viewWithTag(MarkerDialogBubbleBuilder.markerBodyTag) {
+                let avatarCenterY = markerBody.frame.minY + style.dopinFrameHeight / 2
+                let avatarCenterX = markerBody.frame.midX
+                centerOffset = CGPoint(
+                    x: width / 2 - avatarCenterX,
+                    y: height / 2 - avatarCenterY
+                )
+            } else {
                 centerOffset = CGPoint(
                     x: (0.5 - style.anchor.x) * width,
                     y: (0.5 - style.anchor.y) * height
@@ -792,7 +1123,19 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
-        super.applyFlutterMarkerShadow(contentView: contentView ?? viewWithTag(Self.contentTag))
+        let content = contentView ?? viewWithTag(Self.contentTag)
+        // Shadow on a superview of UIVisualEffectView forces an offscreen pass and
+        // kills cloud glass blur — pin shadow to the marker body only.
+        if let flutter = resolvedFlutterAnnotation(),
+           flutter.usesMarkerDialog,
+           flutter.dialogStyle == "cloud",
+           let content = content,
+           let markerBody = content.viewWithTag(MarkerDialogBubbleBuilder.markerBodyTag) {
+            content.layer.shadowOpacity = 0
+            MarkerShadowStyle.apply(to: markerBody, from: flutter)
+            return
+        }
+        super.applyFlutterMarkerShadow(contentView: content)
     }
 
     override func resolvedFlutterAnnotation() -> FlutterAnnotation? {
@@ -903,9 +1246,19 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
 
         if hasLabel {
             let badge = UIView(frame: CGRect(x: 0, y: totalH - badgeH, width: totalW, height: badgeH))
-            badge.backgroundColor = .white
             badge.layer.cornerRadius = badgeH / 2
             badge.clipsToBounds = true
+            if let bgColors = annotation.dopinLabelBackgroundGradientColors, bgColors.count >= 2 {
+                badge.backgroundColor = .clear
+                let gradientLayer = CAGradientLayer()
+                gradientLayer.frame = badge.bounds
+                gradientLayer.colors = bgColors.map { $0.cgColor }
+                gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+                gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+                badge.layer.insertSublayer(gradientLayer, at: 0)
+            } else {
+                badge.backgroundColor = annotation.dopinLabelBackgroundColor
+            }
             let labelFrame = badge.bounds.insetBy(dx: 4, dy: 2)
             let badgeLabel = makeBadgeLabel(
                 text: labelText,
@@ -1282,7 +1635,17 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
-        super.applyFlutterMarkerShadow(contentView: contentView ?? viewWithTag(Self.contentTag))
+        let content = contentView ?? viewWithTag(Self.contentTag)
+        if let flutter = annotation as? FlutterAnnotation,
+           flutter.usesMarkerDialog,
+           flutter.dialogStyle == "cloud",
+           let content = content,
+           let markerBody = content.viewWithTag(MarkerDialogBubbleBuilder.markerBodyTag) {
+            content.layer.shadowOpacity = 0
+            MarkerShadowStyle.apply(to: markerBody, from: flutter)
+            return
+        }
+        super.applyFlutterMarkerShadow(contentView: content)
     }
 
     private func applyAnnotationIfNeeded(force: Bool) {

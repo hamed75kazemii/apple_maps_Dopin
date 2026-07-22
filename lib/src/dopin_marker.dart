@@ -27,7 +27,9 @@ class DopinMarker {
     this.labelFontSize = 10,
     this.badgeHeight = 18,
     this.labelColor = const Color(0xFF7B2CBF),
+    this.labelBackgroundColor = Colors.white,
     this.labelGradientColors,
+    this.labelBackgroundGradientColors,
   });
 
   factory DopinMarker.withPng({
@@ -42,7 +44,9 @@ class DopinMarker {
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
+    Color labelBackgroundColor = Colors.white,
     List<Color>? labelGradientColors,
+    List<Color>? labelBackgroundGradientColors,
   }) {
     return DopinMarker(
       imagePng: imagePng,
@@ -56,7 +60,9 @@ class DopinMarker {
       labelFontSize: labelFontSize,
       badgeHeight: badgeHeight,
       labelColor: labelColor,
+      labelBackgroundColor: labelBackgroundColor,
       labelGradientColors: labelGradientColors,
+      labelBackgroundGradientColors: labelBackgroundGradientColors,
     );
   }
 
@@ -76,7 +82,9 @@ class DopinMarker {
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
+    Color labelBackgroundColor = Colors.white,
     List<Color>? labelGradientColors,
+    List<Color>? labelBackgroundGradientColors,
   }) async {
     List<dynamic> assetJson;
     if (!mipmaps && configuration.devicePixelRatio != null) {
@@ -102,7 +110,9 @@ class DopinMarker {
       labelFontSize: labelFontSize,
       badgeHeight: badgeHeight,
       labelColor: labelColor,
+      labelBackgroundColor: labelBackgroundColor,
       labelGradientColors: labelGradientColors,
+      labelBackgroundGradientColors: labelBackgroundGradientColors,
     );
   }
 
@@ -130,8 +140,15 @@ class DopinMarker {
   final double badgeHeight;
   final Color labelColor;
 
+  /// Background color of the bottom label badge.
+  final Color labelBackgroundColor;
+
   /// When set (2+ colors), native iOS draws the badge label with a horizontal gradient.
   final List<Color>? labelGradientColors;
+
+  /// When set (2+ colors), native iOS fills the badge background with a diagonal
+  /// gradient (top-left → bottom-right; overrides [labelBackgroundColor]).
+  final List<Color>? labelBackgroundGradientColors;
 
   Map<String, dynamic> _toJson() {
     final Map<String, dynamic> json = <String, dynamic>{
@@ -142,6 +159,7 @@ class DopinMarker {
       'labelFontSize': labelFontSize,
       'badgeHeight': badgeHeight,
       'labelColor': labelColor.value,
+      'labelBackgroundColor': labelBackgroundColor.value,
       if (imageUrls != null && imageUrls!.isNotEmpty)
         'imageUrls': imageUrls!.take(4).toList(),
       if (imagePng != null) 'imagePng': imagePng,
@@ -158,6 +176,11 @@ class DopinMarker {
     if (labelGradientColors != null && labelGradientColors!.length >= 2) {
       json['labelGradientColors'] =
           labelGradientColors!.map((Color c) => c.value).toList();
+    }
+    if (labelBackgroundGradientColors != null &&
+        labelBackgroundGradientColors!.length >= 2) {
+      json['labelBackgroundGradientColors'] =
+          labelBackgroundGradientColors!.map((Color c) => c.value).toList();
     }
     return json;
   }
@@ -180,7 +203,10 @@ class DopinMarker {
         labelFontSize == o.labelFontSize &&
         badgeHeight == o.badgeHeight &&
         labelColor == o.labelColor &&
-        _listEqual(labelGradientColors, o.labelGradientColors);
+        labelBackgroundColor == o.labelBackgroundColor &&
+        _listEqual(labelGradientColors, o.labelGradientColors) &&
+        _listEqual(
+            labelBackgroundGradientColors, o.labelBackgroundGradientColors);
   }
 
   @override
@@ -198,9 +224,13 @@ class DopinMarker {
         labelFontSize,
         badgeHeight,
         labelColor,
+        labelBackgroundColor,
         labelGradientColors == null
             ? null
             : Object.hashAll(labelGradientColors!),
+        labelBackgroundGradientColors == null
+            ? null
+            : Object.hashAll(labelBackgroundGradientColors!),
       );
 
   static bool _bytesEqual(Uint8List? a, Uint8List? b) {

@@ -55,6 +55,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   static const Duration _dialogMarkerDelay = Duration(seconds: 1);
 
   static const LatLng _dialogMarkerPosition = LatLng(34.0530, -118.2420);
+  static const LatLng _cloudDialogMarkerPosition = LatLng(34.0530, -118.2405);
 
   static const CameraPosition _losAngeles = CameraPosition(
     target: _dialogMarkerPosition,
@@ -62,7 +63,6 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     pitch: 60,
   );
 
-  static const Color _labelColor = Color(0xFF7B2CBF);
   static const MarkerShadow _demoShadow = MarkerShadow();
 
   static final Annotation _dialogDemoMarker = Annotation(
@@ -72,15 +72,45 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     shadow: _demoShadow,
     dopinMarker: const DopinMarker(
       imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
+      label: 'dopin',
       width: 46,
       height: 46,
       borderWidth: 3,
       borderColor: Colors.white,
       borderRadius: 12,
-      labelColor: _labelColor,
+      labelColor: Colors.white,
+      labelBackgroundGradientColors: <Color>[
+        Color(0xFFEC30E4),
+        Color(0xFF581DFF),
+      ],
     ),
     dialog: const MarkerDialog(
       text: '1 Market Street San Francisco California',
+    ),
+  );
+
+  static final Annotation _cloudDialogDemoMarker = Annotation(
+    annotationId: const AnnotationId('cloud_dialog_demo'),
+    position: _cloudDialogMarkerPosition,
+    onTap: () {},
+    shadow: _demoShadow,
+    dopinMarker: const DopinMarker(
+      imageUrls: <String>['https://i.pravatar.cc/150?img=32'],
+      //   label: 'dopin',
+      width: 46,
+      height: 46,
+      borderWidth: 3,
+      borderColor: Colors.white,
+      borderRadius: 12,
+      labelColor: Colors.white,
+      labelBackgroundGradientColors: <Color>[
+        Color(0xFFEC30E4),
+        Color(0xFF581DFF),
+      ],
+    ),
+    dialog: const CloudDialogBox(
+      text: "I'm craving pizza!!!Let's eat together!🍕",
+      textColor: Colors.black,
     ),
   );
 
@@ -106,8 +136,8 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   void _showDialogMarker() {
     if (!mounted) return;
     setState(() {
-      _annotations = <Annotation>{_dialogDemoMarker};
-      _status = 'مارکر دیالوگ نمایش داده شد';
+      _annotations = <Annotation>{_dialogDemoMarker, _cloudDialogDemoMarker};
+      _status = 'مارکر دیالوگ و کلاد دیالوگ نمایش داده شد';
     });
   }
 
@@ -377,7 +407,9 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
               onCameraIdle: _onCameraIdle,
               onTrackingModeChanged: _onTrackingModeChanged,
               myLocationMarker: const MyLocationMarker(
+                label: 'Me',
                 imageUrl: 'https://i.pravatar.cc/150?img=12',
+                dialog: CloudDialogBox(text: "I'm ", textColor: Colors.red),
               ),
               myLocationButtonEnabled: false,
             ),

@@ -54,7 +54,9 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var dopinLabelFontSize: CGFloat = 10
     var dopinBadgeHeight: CGFloat = 18
     var dopinLabelColor: UIColor = UIColor(red: 123/255, green: 44/255, blue: 191/255, alpha: 1)
+    var dopinLabelBackgroundColor: UIColor = .white
     var dopinLabelGradientColors: [UIColor]?
+    var dopinLabelBackgroundGradientColors: [UIColor]?
 
     var usesSvgMarker: Bool = false
     var svgWidth: CGFloat = 38
@@ -86,7 +88,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var cardDistanceFontSize: CGFloat = 15
     var cardMaxWidth: CGFloat = 320
 
-    /// Pill dialog above Dopin / SVG markers (Figma marker dialog).
+    /// Pill / cloud dialog above Dopin / SVG markers (Figma marker dialog).
     var usesMarkerDialog: Bool = false
     var dialogText: String = ""
     var dialogWidth: CGFloat = 163
@@ -97,6 +99,8 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var dialogHorizontalPadding: CGFloat = 10
     var dialogGapAboveMarker: CGFloat = 4
     var dialogMarqueeSpeed: CGFloat = 16
+    /// `"pill"` (default) or `"cloud"` (frosted glass thought bubble).
+    var dialogStyle: String = "pill"
 
     /// When true, plays a spring scale-in animation when the marker is first added.
     var scaleInOnAdd: Bool = false
@@ -112,7 +116,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         let asset = dopinImageAssetName ?? ""
         let radius = dopinBorderRadius.map { "\($0)" } ?? "circle"
         let urls = dopinImageUrls.joined(separator: ",")
-        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)|\(dopinLabelGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(markerDialogSignature)"
+        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)|\(dopinLabelBackgroundColor)|\(dopinLabelGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(dopinLabelBackgroundGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(markerDialogSignature)"
     }
 
     var svgMarkerSignature: String {
@@ -132,6 +136,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             "\(dialogHorizontalPadding)",
             "\(dialogGapAboveMarker)",
             "\(dialogMarqueeSpeed)",
+            dialogStyle,
         ].joined(separator: "|")
     }
 
@@ -280,12 +285,26 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             } else if let lc = dopin["labelColor"] as? Int {
                 self.dopinLabelColor = Self.uiColorFromArgb(UInt32(lc))
             }
+            if let lbg = dopin["labelBackgroundColor"] as? NSNumber {
+                self.dopinLabelBackgroundColor = Self.uiColorFromArgb(lbg.uint32Value)
+            } else if let lbg = dopin["labelBackgroundColor"] as? Int {
+                self.dopinLabelBackgroundColor = Self.uiColorFromArgb(UInt32(lbg))
+            }
             if let gradient = dopin["labelGradientColors"] as? [NSNumber], gradient.count >= 2 {
                 self.dopinLabelGradientColors = gradient.map {
                     Self.uiColorFromArgb($0.uint32Value)
                 }
             } else if let gradient = dopin["labelGradientColors"] as? [Int], gradient.count >= 2 {
                 self.dopinLabelGradientColors = gradient.map {
+                    Self.uiColorFromArgb(UInt32($0))
+                }
+            }
+            if let bgGradient = dopin["labelBackgroundGradientColors"] as? [NSNumber], bgGradient.count >= 2 {
+                self.dopinLabelBackgroundGradientColors = bgGradient.map {
+                    Self.uiColorFromArgb($0.uint32Value)
+                }
+            } else if let bgGradient = dopin["labelBackgroundGradientColors"] as? [Int], bgGradient.count >= 2 {
+                self.dopinLabelBackgroundGradientColors = bgGradient.map {
                     Self.uiColorFromArgb(UInt32($0))
                 }
             }
@@ -368,7 +387,13 @@ class FlutterAnnotation: NSObject, MKAnnotation {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !rawText.isEmpty {
                 self.usesMarkerDialog = true
-                self.dialogText = rawText
+                if let style = dialog["style"] as? String, !style.isEmpty {
+                    self.dialogStyle = style
+                }
+                // Cloud bubble fits at most 40 characters.
+                self.dialogText = self.dialogStyle == "cloud"
+                    ? Self.clampCloudDialogText(rawText)
+                    : rawText
                 if let v = Self.cg(dialog["width"]) { self.dialogWidth = v }
                 if let v = Self.cg(dialog["height"]) { self.dialogHeight = v }
                 if let color = Self.argb(dialog["backgroundColor"]) {
@@ -408,6 +433,33 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         if let i = value as? Int { return UInt32(truncatingIfNeeded: UInt64(i)) }
         if let i = value as? Int64 { return UInt32(truncatingIfNeeded: UInt64(i)) }
         return nil
+    }
+
+    private static let cloudDialogMaxCharacters = 40
+    private static let cloudDialogMaxCharactersPerLine = 20
+
+    private static func clampCloudDialogText(_ text: String) -> String {
+        let withoutBreaks = text.replacingOccurrences(of: "\n", with: "")
+        let cleaned = withoutBreaks
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return cleaned }
+
+        var chars: [Character] = []
+        for ch in cleaned {
+            if chars.count >= cloudDialogMaxCharacters { break }
+            chars.append(ch)
+        }
+        guard !chars.isEmpty else { return "" }
+
+        var lines: [String] = []
+        var index = 0
+        while index < chars.count {
+            let end = min(index + cloudDialogMaxCharactersPerLine, chars.count)
+            lines.append(String(chars[index..<end]))
+            index = end
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static func coordinateValues(from value: Any?) -> [Double] {
@@ -460,7 +512,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
     
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
-        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature && lhs.markerDialogSignature == rhs.markerDialogSignature
+        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelBackgroundColor == rhs.dopinLabelBackgroundColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.dopinLabelBackgroundGradientColors == rhs.dopinLabelBackgroundGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature && lhs.markerDialogSignature == rhs.markerDialogSignature
     }
     
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {

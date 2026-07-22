@@ -246,10 +246,10 @@ class Annotation {
   /// card tail points down at [position], so use `anchor: Offset(0.5, 1.0)`.
   final CardMarker? cardMarker;
 
-  /// Optional pill dialog shown above a [dopinMarker] or [svgMarker] (iOS).
+  /// Optional dialog shown above a [dopinMarker] or [svgMarker] (iOS).
   ///
-  /// Presence enables the bubble; empty [MarkerDialog.text] hides it. Fixed
-  /// width with right-to-left marquee when the text overflows.
+  /// Use [MarkerDialog] for the dark pill, or [CloudDialogBox] for the frosted
+  /// glass thought bubble. Empty text hides the bubble.
   final MarkerDialog? dialog;
 
   /// When true (iOS), the marker plays a spring scale-in animation when first added.

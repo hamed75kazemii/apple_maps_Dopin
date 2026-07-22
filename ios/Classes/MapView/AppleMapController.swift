@@ -144,7 +144,12 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 
         if let markerData = Self.customUserLocationMarkerData(from: options) {
             mapView.userLocationMarkerData = markerData
-            if options["myLocationEnabled"] as? Bool == true {
+            // Recreate so style changes (e.g. CloudDialogBox) apply immediately.
+            let coordinate = mapView.lastUserCoordinate ?? mapView.userLocation.coordinate
+            removeUserLocationMarker()
+            if FlutterMapView.isValidUserCoordinate(coordinate) {
+                syncUserLocationMarker(at: coordinate)
+            } else if options["myLocationEnabled"] as? Bool == true {
                 mapView.setUserLocation()
             }
         } else {
