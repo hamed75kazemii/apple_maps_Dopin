@@ -435,31 +435,10 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         return nil
     }
 
-    private static let cloudDialogMaxCharacters = 40
-    private static let cloudDialogMaxCharactersPerLine = 20
-
     private static func clampCloudDialogText(_ text: String) -> String {
-        let withoutBreaks = text.replacingOccurrences(of: "\n", with: "")
-        let cleaned = withoutBreaks
+        text
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty else { return cleaned }
-
-        var chars: [Character] = []
-        for ch in cleaned {
-            if chars.count >= cloudDialogMaxCharacters { break }
-            chars.append(ch)
-        }
-        guard !chars.isEmpty else { return "" }
-
-        var lines: [String] = []
-        var index = 0
-        while index < chars.count {
-            let end = min(index + cloudDialogMaxCharactersPerLine, chars.count)
-            lines.append(String(chars[index..<end]))
-            index = end
-        }
-        return lines.joined(separator: "\n")
     }
 
     private static func coordinateValues(from value: Any?) -> [Double] {

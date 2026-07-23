@@ -572,33 +572,16 @@ enum MarkerDialogBubbleBuilder {
     /// Detached thought-dot diameter in design coords.
     private static let cloudDotDesignSize: CGFloat = 10
     private static let cloudDotGapDesign: CGFloat = 1
-    private static let cloudMaxCharacters = 40
-    private static let cloudMaxCharactersPerLine = 20
+    /// Max text column width (points) inside the cloud.
+    private static let cloudMaxTextWidth: CGFloat = 64
+    /// Visible lines before the text area becomes scrollable.
+    private static let cloudMaxVisibleLines = 3
 
-    /// Clamp to 40 graphemes and hard-wrap every 20 characters.
+    /// Normalize whitespace; wrapping is width-based (64pt), not character-grid.
     private static func clampCloudDialogText(_ text: String) -> String {
-        // Strip soft breaks from Dart without inserting spaces (would shift the 20-char grid).
-        let withoutBreaks = text.replacingOccurrences(of: "\n", with: "")
-        let cleaned = withoutBreaks
+        text
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty else { return cleaned }
-
-        var chars: [Character] = []
-        for ch in cleaned {
-            if chars.count >= cloudMaxCharacters { break }
-            chars.append(ch)
-        }
-        guard !chars.isEmpty else { return "" }
-
-        var lines: [String] = []
-        var index = 0
-        while index < chars.count {
-            let end = min(index + cloudMaxCharactersPerLine, chars.count)
-            lines.append(String(chars[index..<end]))
-            index = end
-        }
-        return lines.joined(separator: "\n")
     }
 
     static func wrapIfNeeded(markerContent: UIView, annotation: FlutterAnnotation) -> UIView {
@@ -700,7 +683,7 @@ enum MarkerDialogBubbleBuilder {
     }
 
     /// Frosted-glass cloud thought bubble (Figma Group 809 / Union path).
-    /// Body size fits the text (unless the caller set an explicit width/height > 0).
+    /// Text wraps at 64pt; up to 3 lines visible, then vertical scroll.
     private static func buildCloudBubble(annotation: FlutterAnnotation) -> UIView {
         let text = clampCloudDialogText(annotation.dialogText)
         let font = roundedFont(size: annotation.dialogFontSize)
@@ -731,7 +714,9 @@ enum MarkerDialogBubbleBuilder {
         let width = measured.cloudSize.width
         let height = measured.cloudSize.height
         let textWidth = measured.textSize.width
-        let textHeight = measured.textSize.height
+        let visibleTextHeight = measured.visibleTextHeight
+        let fullTextHeight = measured.fullTextHeight
+        let needsScroll = fullTextHeight > visibleTextHeight + 0.5
 
         let sx = width / cloudDesignWidth
         let sy = height / cloudDesignHeight
@@ -740,66 +725,92 @@ enum MarkerDialogBubbleBuilder {
         let dotGap = cloudDotGapDesign * scale
         let totalHeight = height + dotGap + dotSize
 
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: totalHeight))
+        let container: UIView
+        if needsScroll {
+            // Pass-through host: only the scroll view captures touches.
+            container = _CloudDialogPassThroughView(
+                frame: CGRect(x: 0, y: 0, width: width, height: totalHeight)
+            )
+            container.isUserInteractionEnabled = true
+        } else {
+            container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: totalHeight))
+            container.isUserInteractionEnabled = false
+        }
         container.backgroundColor = .clear
         container.clipsToBounds = false
-        container.isUserInteractionEnabled = false
 
         let cloudPath = cloudBodyPath(width: width, height: height)
+        // Default glass: white 80% transparent; caller tint still applied.
+        let tint = annotation.dialogBackgroundColor
         let cloudGlass = makeGlassView(
             path: cloudPath,
             bounds: CGRect(x: 0, y: 0, width: width, height: height),
-            tint: annotation.dialogBackgroundColor
+            tint: tint
         )
         container.addSubview(cloudGlass)
 
         let lobeReserve = height * (6.0 / cloudDesignHeight)
-        let textTop = max(vPad, (height - lobeReserve - textHeight) / 2)
-        let textContainer = UIView(frame: CGRect(
+        let textTop = max(vPad, (height - lobeReserve - visibleTextHeight) / 2)
+        let textFrame = CGRect(
             x: hPad,
             y: textTop,
             width: textWidth,
-            height: textHeight
-        ))
-        textContainer.backgroundColor = .clear
-        textContainer.clipsToBounds = false
-        textContainer.isUserInteractionEnabled = false
-        container.addSubview(textContainer)
+            height: visibleTextHeight
+        )
 
-        let label = UILabel(frame: textContainer.bounds)
+        let scrollView = UIScrollView(frame: textFrame)
+        scrollView.backgroundColor = .clear
+        scrollView.showsVerticalScrollIndicator = needsScroll
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.alwaysBounceVertical = needsScroll
+        scrollView.isScrollEnabled = needsScroll
+        scrollView.isUserInteractionEnabled = needsScroll
+        scrollView.clipsToBounds = true
+        scrollView.contentSize = CGSize(width: textWidth, height: fullTextHeight)
+        // Prefer text scroll over map pan when dragging on the bubble.
+        scrollView.delaysContentTouches = true
+        scrollView.canCancelContentTouches = true
+        container.addSubview(scrollView)
+
+        let label = UILabel(frame: CGRect(x: 0, y: 0, width: textWidth, height: fullTextHeight))
         label.attributedText = attributed
         label.textAlignment = .center
-        label.numberOfLines = 3
+        label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
         label.adjustsFontSizeToFitWidth = false
         label.preferredMaxLayoutWidth = textWidth
-        textContainer.addSubview(label)
+        scrollView.addSubview(label)
 
+        // Solid thought-dot (not glass).
         let dotRect = CGRect(
             x: (width - dotSize) / 2,
             y: height + dotGap,
             width: dotSize,
             height: dotSize
         )
-        let dotPath = UIBezierPath(ovalIn: CGRect(origin: .zero, size: dotRect.size))
-        let dotGlass = makeGlassView(
-            path: dotPath,
-            bounds: CGRect(origin: .zero, size: dotRect.size),
-            tint: annotation.dialogBackgroundColor
-        )
-        dotGlass.frame = dotRect
-        container.addSubview(dotGlass)
-        container.bringSubviewToFront(textContainer)
+        let dot = UIView(frame: dotRect)
+        dot.backgroundColor = UIColor.white.withAlphaComponent(0.8)
+        dot.layer.cornerRadius = dotSize / 2
+        dot.isUserInteractionEnabled = false
+        dot.layer.shadowColor = UIColor.black.cgColor
+        dot.layer.shadowOpacity = 0.15
+        dot.layer.shadowOffset = CGSize(width: 0, height: 4)
+        dot.layer.shadowRadius = 9
+        dot.layer.shadowPath = UIBezierPath(ovalIn: CGRect(origin: .zero, size: dotRect.size)).cgPath
+        container.addSubview(dot)
+        container.bringSubviewToFront(scrollView)
 
         return container
     }
 
     private struct CloudTextLayout {
         let textSize: CGSize
+        let visibleTextHeight: CGFloat
+        let fullTextHeight: CGFloat
         let cloudSize: CGSize
     }
 
-    /// Sizes the cloud to the text. `explicitWidth` / `explicitHeight` > 0 pin that axis.
+    /// Sizes the cloud to the text. Text column is capped at [cloudMaxTextWidth].
     private static func measureCloudText(
         attributed: NSAttributedString,
         font: UIFont,
@@ -808,7 +819,7 @@ enum MarkerDialogBubbleBuilder {
         hPad: CGFloat,
         vPad: CGFloat
     ) -> CloudTextLayout {
-        let minTextWidth: CGFloat = 36
+        let minTextWidth: CGFloat = 24
         let ns = attributed.string as NSString
         let attrs: [NSAttributedString.Key: Any]
         if attributed.length > 0 {
@@ -817,43 +828,49 @@ enum MarkerDialogBubbleBuilder {
             attrs = [.font: font]
         }
 
-        // Text is already hard-wrapped (20 chars/line); measure as-is.
-        let fitted = ns.boundingRect(
-            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: font.lineHeight * 4),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attrs,
-            context: nil
-        )
-
-        var textWidth = max(minTextWidth, ceil(fitted.width))
-        var textHeight = max(ceil(font.lineHeight), ceil(fitted.height))
-        textHeight = min(textHeight, ceil(font.lineHeight * 3))
-
+        let wrapWidth: CGFloat
         if explicitWidth > 0 {
-            textWidth = max(minTextWidth, explicitWidth - hPad * 2)
-            let wrapped = ns.boundingRect(
-                with: CGSize(width: textWidth, height: font.lineHeight * 4),
+            wrapWidth = max(minTextWidth, min(cloudMaxTextWidth, explicitWidth - hPad * 2))
+        } else {
+            let single = ns.boundingRect(
+                with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: font.lineHeight * 2),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attrs,
                 context: nil
             )
-            textHeight = min(ceil(wrapped.height), ceil(font.lineHeight * 3))
+            wrapWidth = max(minTextWidth, min(cloudMaxTextWidth, ceil(single.width)))
         }
 
-        var cloudW = ceil(textWidth + hPad * 2)
-        var cloudH = ceil(textHeight + vPad * 2 + max(6, textHeight * 0.18))
+        let full = ns.boundingRect(
+            with: CGSize(width: wrapWidth, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs,
+            context: nil
+        )
+        let fullTextHeight = max(ceil(font.lineHeight), ceil(full.height))
+        let maxVisible = ceil(font.lineHeight) * CGFloat(cloudMaxVisibleLines)
+            + CGFloat(max(0, cloudMaxVisibleLines - 1)) // lineSpacing ≈ 1
+        let visibleTextHeight = min(fullTextHeight, maxVisible)
+
+        var cloudW = ceil(wrapWidth + hPad * 2)
+        var cloudH = ceil(visibleTextHeight + vPad * 2 + max(6, visibleTextHeight * 0.18))
         cloudW = max(cloudW, 52)
         cloudH = max(cloudH, 36)
 
         if explicitWidth > 0 { cloudW = explicitWidth }
         if explicitHeight > 0 { cloudH = explicitHeight }
 
-        let finalTextW = max(minTextWidth, cloudW - hPad * 2)
+        let finalTextW = max(minTextWidth, min(cloudMaxTextWidth, cloudW - hPad * 2))
         let lobeReserve = cloudH * (6.0 / cloudDesignHeight)
-        let finalTextH = min(textHeight, max(ceil(font.lineHeight), cloudH - lobeReserve - vPad))
+        let finalVisible = min(
+            visibleTextHeight,
+            max(ceil(font.lineHeight), cloudH - lobeReserve - vPad)
+        )
 
         return CloudTextLayout(
-            textSize: CGSize(width: finalTextW, height: finalTextH),
+            textSize: CGSize(width: finalTextW, height: finalVisible),
+            visibleTextHeight: finalVisible,
+            fullTextHeight: fullTextHeight,
             cloudSize: CGSize(width: cloudW, height: cloudH)
         )
     }
@@ -870,7 +887,6 @@ enum MarkerDialogBubbleBuilder {
         host.clipsToBounds = false
         host.isUserInteractionEnabled = false
 
-        // Shadow as a sibling shape (not on the blur's superview layer).
         let shadowLayer = CAShapeLayer()
         shadowLayer.frame = bounds
         shadowLayer.path = path.cgPath
@@ -882,21 +898,29 @@ enum MarkerDialogBubbleBuilder {
         shadowLayer.shadowPath = path.cgPath
         host.layer.addSublayer(shadowLayer)
 
-        // `.light` samples the map more clearly than system materials, which look
-        // chalky/opaque on large shapes (the small thought-dot was fine either way).
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .light))
         blur.frame = bounds
         blur.isUserInteractionEnabled = false
 
+        // Base tint (default: white ~80% transparent).
         let tintView = UIView(frame: blur.contentView.bounds)
         tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         tintView.backgroundColor = tint
         blur.contentView.addSubview(tintView)
 
-        // Complex cloud paths break when maskView itself uses layer.mask (nested).
-        // Rasterize the path to an image mask — same technique for body + dot.
-        blur.mask = makePathImageMaskView(path: path, bounds: bounds)
+        // Glass sheen: 15% white at -45°.
+        let sheen = CAGradientLayer()
+        sheen.frame = bounds
+        sheen.colors = [
+            UIColor.white.withAlphaComponent(0.15).cgColor,
+            UIColor.white.withAlphaComponent(0.0).cgColor,
+        ]
+        // -45° ≈ top-leading → bottom-trailing
+        sheen.startPoint = CGPoint(x: 0, y: 0)
+        sheen.endPoint = CGPoint(x: 1, y: 1)
+        blur.contentView.layer.addSublayer(sheen)
 
+        blur.mask = makePathImageMaskView(path: path, bounds: bounds)
         host.addSubview(blur)
 
         let border = CAShapeLayer()
@@ -1062,6 +1086,15 @@ enum MarkerDialogBubbleBuilder {
             return UIFont(descriptor: descriptor, size: size)
         }
         return UIFont.systemFont(ofSize: size, weight: .regular)
+    }
+}
+
+/// Lets empty areas pass touches through so marker `onTap` still fires; only
+/// interactive children (the text scroll view) receive gestures.
+private final class _CloudDialogPassThroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
     }
 }
 

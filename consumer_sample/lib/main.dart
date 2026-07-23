@@ -109,7 +109,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       ],
     ),
     dialog: const CloudDialogBox(
-      text: "I'm craving pizza!!!Let's eat together!🍕",
+      text: "I'm craving pizza!!!Let's eat together!🍕I'm craving pizza!!!Let's eat together!🍕",
       textColor: Colors.black,
     ),
   );

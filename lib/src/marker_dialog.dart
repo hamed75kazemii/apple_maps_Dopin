@@ -70,46 +70,21 @@ class MarkerDialog {
 
   /// Marquee speed in points per second when [text] overflows [width].
   ///
-  /// Ignored for [MarkerDialogStyle.cloud] (text wraps instead).
+  /// Ignored for [MarkerDialogStyle.cloud] (text wraps / scrolls instead).
   final double marqueeSpeed;
 
   /// Bubble appearance. Defaults to the classic dark pill.
   final MarkerDialogStyle style;
 
-  /// Max graphemes shown inside a [CloudDialogBox] (pill is unlimited / marquee).
-  static const int cloudMaxCharacters = 40;
+  /// Max text column width (logical px) for [CloudDialogBox] line wrapping.
+  static const double cloudMaxTextWidth = 64;
 
-  /// Max graphemes per line inside a [CloudDialogBox] (hard-wrapped).
-  static const int cloudMaxCharactersPerLine = 20;
+  /// Visible lines in [CloudDialogBox] before the text area scrolls.
+  static const int cloudMaxVisibleLines = 3;
 
   String get _resolvedText {
     if (style != MarkerDialogStyle.cloud) return text;
-    return _formatCloudText(text);
-  }
-
-  /// Clamp to [cloudMaxCharacters] and hard-wrap every [cloudMaxCharactersPerLine].
-  static String _formatCloudText(String value) {
-    final String cleaned = value
-        .replaceAll('\n', '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    if (cleaned.isEmpty) return cleaned;
-
-    final List<int> chars = <int>[];
-    for (final int rune in cleaned.runes) {
-      if (chars.length >= cloudMaxCharacters) break;
-      chars.add(rune);
-    }
-    if (chars.isEmpty) return '';
-
-    final StringBuffer buffer = StringBuffer();
-    for (int i = 0; i < chars.length; i++) {
-      if (i > 0 && i % cloudMaxCharactersPerLine == 0) {
-        buffer.write('\n');
-      }
-      buffer.writeCharCode(chars[i]);
-    }
-    return buffer.toString();
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   /// Estimated cloud body size for layout/anchor when [width]/[height] are auto (`0`).
@@ -118,15 +93,14 @@ class MarkerDialog {
     double fontSize = 12,
     double horizontalPadding = 4,
   }) {
-    final String formatted = _formatCloudText(text);
-    if (formatted.isEmpty) {
+    final String cleaned = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (cleaned.isEmpty) {
       return const Size(52, 36);
     }
-    const double minTextWidth = 36;
     const double vPad = 5;
     final TextPainter painter = TextPainter(
       text: TextSpan(
-        text: formatted,
+        text: cleaned,
         style: TextStyle(
           fontSize: fontSize,
           height: 1.15,
@@ -134,14 +108,17 @@ class MarkerDialog {
         ),
       ),
       textDirection: TextDirection.ltr,
-      maxLines: 3,
     );
-    painter.layout();
-    final double textW = painter.width.clamp(minTextWidth, 200.0);
-    final double textH = painter.height;
+    painter.layout(maxWidth: cloudMaxTextWidth);
+    final double textW =
+        painter.width.clamp(24.0, cloudMaxTextWidth).toDouble();
+    final double fullH = painter.height;
+    final double lineH = fontSize * 1.15;
+    final double visibleH =
+        fullH < lineH * cloudMaxVisibleLines ? fullH : lineH * cloudMaxVisibleLines;
     final double cloudW = (textW + horizontalPadding * 2).clamp(52.0, 200.0);
-    final double lobeExtra = textH * 0.18 > 6 ? textH * 0.18 : 6;
-    final double cloudH = (textH + vPad * 2 + lobeExtra).clamp(36.0, 140.0);
+    final double lobeExtra = visibleH * 0.18 > 6 ? visibleH * 0.18 : 6;
+    final double cloudH = (visibleH + vPad * 2 + lobeExtra).clamp(36.0, 140.0);
     return Size(cloudW, cloudH);
   }
 
@@ -193,13 +170,11 @@ class MarkerDialog {
 
 /// Cloud thought-bubble dialog with frosted-glass fill (iOS).
 ///
-/// Pass to [Annotation.dialog] like [MarkerDialog]. Matches the Dopin Figma
-/// cloud dialog: scalloped cloud body, dotted tail overlapping the marker, and
-/// live map blur behind.
+/// Pass to [Annotation.dialog] like [MarkerDialog]. Text wraps at
+/// [MarkerDialog.cloudMaxTextWidth] (64). Up to
+/// [MarkerDialog.cloudMaxVisibleLines] (3) lines are shown; longer text scrolls.
 ///
-/// [text] is clamped to [MarkerDialog.cloudMaxCharacters] (40) and hard-wrapped
-/// every [MarkerDialog.cloudMaxCharactersPerLine] (20). With default
-/// [width]/[height] of `0`, the native bubble sizes itself to the text.
+/// With default [width]/[height] of `0`, the native bubble sizes itself to the text.
 @immutable
 class CloudDialogBox extends MarkerDialog {
   const CloudDialogBox({
@@ -208,8 +183,8 @@ class CloudDialogBox extends MarkerDialog {
     double width = 0,
     /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
     double height = 0,
-    /// Frosted tint over the live blur (more transparent = stronger glass).
-    Color backgroundColor = const Color(0x28FFFFFF),
+    /// White ~80% transparent glass tint.
+    Color backgroundColor = const Color(0x33FFFFFF),
     /// Text / font color inside the cloud. Defaults to black.
     Color textColor = Colors.black,
     double fontSize = 12,
