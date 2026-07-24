@@ -120,15 +120,11 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     ),
   );
 
-  /// Moves the camera so [position] sits near the top-left of the screen.
+  /// Moves the camera so [position] uses the offset set in [onMapCreated].
   Future<void> _focusOnMarker(LatLng position) async {
     final controller = _controller;
     if (controller == null) return;
 
-    final size = MediaQuery.sizeOf(context);
-    await controller.setCameraOffset(
-      Offset(size.width * 0.28, size.height * 0.32),
-    );
     await controller.animateCamera(
       CameraUpdate.newLatLngZoom(position, 17),
       duration: const Duration(milliseconds: 500),
@@ -150,9 +146,17 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
       return;
     }
 
-    await controller.clearCameraOffset();
     await controller.goToMyLocation();
     await controller.followMyLocation();
+  }
+
+  Future<void> _onMapCreated(AppleMapController controller) async {
+    _controller = controller;
+    final size = MediaQuery.sizeOf(context);
+    // Set once — all later animateCamera / moveCamera calls reuse this offset.
+    await controller.setCameraOffset(
+      Offset(size.width * 0.28, size.height * 0.32),
+    );
   }
 
   @override
@@ -185,7 +189,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
             showPointsOfInterest: false,
             globeAtMinZoom: true,
             minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
-            onMapCreated: (controller) => _controller = controller,
+            onMapCreated: _onMapCreated,
             annotations: _annotations,
             onTrackingModeChanged: _onTrackingModeChanged,
             myLocationMarker: const MyLocationMarker(

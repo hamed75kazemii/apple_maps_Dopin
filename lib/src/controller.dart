@@ -172,9 +172,9 @@ class AppleMapController {
 
   /// Sets a persistent screen-space offset for camera targets.
   ///
-  /// After calling this, every [animateCamera] / [moveCamera] that moves to a
-  /// [LatLng] places that point at the given screen position instead of the
-  /// geometric center of the map. You do not need to pass padding on each move.
+  /// Call this **once** (typically in `onMapCreated`). Every later
+  /// [animateCamera] / [moveCamera] reuses the same offset until you change
+  /// it or call [clearCameraOffset]. You do not pass padding on each move.
   ///
   /// ## Offset axes (screen points)
   ///
@@ -183,20 +183,20 @@ class AppleMapController {
   /// | [Offset.dx] | Focus appears **left** of screen center |
   /// | [Offset.dy] | Focus appears **above** screen center |
   ///
-  /// Use [Offset.zero] (or [clearCameraOffset]) to restore centering.
-  ///
-  /// ## Example
-  ///
-  /// Place the target near the top-left of the screen, then animate to it:
+  /// ## Recommended usage — set once, reuse always
   ///
   /// ```dart
-  /// final size = MediaQuery.sizeOf(context);
-  /// await controller.setCameraOffset(
-  ///   Offset(size.width * 0.28, size.height * 0.32),
-  /// );
+  /// onMapCreated: (controller) async {
+  ///   _controller = controller;
+  ///   final size = MediaQuery.sizeOf(context);
+  ///   await controller.setCameraOffset(
+  ///     Offset(size.width * 0.28, size.height * 0.32),
+  ///   );
+  /// },
+  ///
+  /// // Later — offset already applied, no need to set again:
   /// await controller.animateCamera(
   ///   CameraUpdate.newLatLngZoom(target, 17),
-  ///   duration: const Duration(milliseconds: 500),
   /// );
   /// ```
   ///
@@ -210,6 +210,8 @@ class AppleMapController {
   ///   `verticalScreenOffset` / padding and are independent of this value.
   /// * Changing the offset alone does not move the camera; call
   ///   [animateCamera] or [moveCamera] afterward.
+  /// * Use [Offset.zero] or [clearCameraOffset] to restore screen-center
+  ///   targeting.
   Future<void> setCameraOffset(Offset offset) async {
     _cameraOffset = offset;
     await channel.invokeMethod<void>('camera#setFocusOffset', <String, dynamic>{
