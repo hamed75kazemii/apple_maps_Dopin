@@ -183,8 +183,8 @@ class CloudDialogBox extends MarkerDialog {
     double width = 0,
     /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
     double height = 0,
-    /// White ~80% transparent glass tint.
-    Color backgroundColor = const Color(0x33FFFFFF),
+    /// White ~95% transparent glass tint.
+    Color backgroundColor = const Color(0x0DFFFFFF),
     /// Text / font color inside the cloud. Defaults to black.
     Color textColor = Colors.black,
     double fontSize = 12,

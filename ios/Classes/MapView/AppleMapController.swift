@@ -81,7 +81,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         cameraAnimationDisplayLink?.invalidate()
         cameraAnimationDisplayLink = nil
     }
-    
+
     public init(withFrame frame: CGRect, withRegistrar registrar: FlutterPluginRegistrar, withargs args: Dictionary<String, Any> ,withId id: Int64) {
         self.options = args["options"] as! [String: Any]
         self.channel = FlutterMethodChannel(name: "apple_maps_plugin.luisthein.de/apple_maps_\(id)", binaryMessenger: registrar.messenger())
@@ -94,16 +94,16 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             options: options,
             userLocationMarkerData: userLocationMarkerData
         )
-        
+
         // To stop the odd movement of the Apple logo.
         self.contentView = UIScrollView()
         self.contentView.addSubview(mapView)
         mapView.autoresizingMask = [.flexibleHeight, .flexibleWidth]
-        
+
         self.initialCameraPosition = args["initialCameraPosition"]! as! Dictionary<String, Any>
-        
+
         super.init()
-        
+
         self.mapView.delegate = self
 
         self.mapView.onUserLocationUpdate = { [weak self] coordinate in
@@ -112,7 +112,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.mapView.onUserLocationClear = { [weak self] in
             self?.removeUserLocationMarker()
         }
-        
+
         self.mapView.setCenterCoordinate(initialCameraPosition, animated: false)
         self.setMethodCallHandlers()
         self.applyMyLocationMarker(from: self.options)
@@ -120,7 +120,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         DispatchQueue.main.async { [weak self] in
             self?.syncUserLocationMarkerIfAvailable()
         }
-        
+
         if let annotationsToAdd: NSArray = args["annotationsToAdd"] as? NSArray {
             self.annotationsToAdd(annotations: annotationsToAdd)
         }
@@ -134,7 +134,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             self.addCircles(circleData: circlesToAdd)
         }
     }
-    
+
     public func view() -> UIView {
         return contentView
     }
@@ -172,7 +172,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     ) -> Dictionary<String, Any>? {
         return options["myLocationMarker"] as? Dictionary<String, Any>
     }
-    
+
     private func setMethodCallHandlers() {
         channel.setMethodCallHandler({ [unowned self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
             if let args: Dictionary<String, Any> = call.arguments as? Dictionary<String,Any> {
@@ -292,7 +292,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             }
         })
     }
-    
+
     private func annotationUpdate(args: Dictionary<String, Any>) -> Void {
         if let annotationsToAdd = args["annotationsToAdd"] as? NSArray {
             if annotationsToAdd.count > 0 {
@@ -310,7 +310,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             }
         }
     }
-    
+
     private func polygonUpdate(args: Dictionary<String, Any>) -> Void {
         if let polyligonsToAdd: NSArray = args["polygonsToAdd"] as? NSArray {
             self.addPolygons(polygonData: polyligonsToAdd)
@@ -322,7 +322,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             self.removePolygons(polygonIds: polygonsToRemove)
         }
     }
-    
+
     private func polylineUpdate(args: Dictionary<String, Any>) -> Void {
         if let polylinesToAdd: NSArray = args["polylinesToAdd"] as? NSArray {
             self.addPolylines(polylineData: polylinesToAdd)
@@ -334,7 +334,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             self.removePolylines(polylineIds: polylinesToRemove)
         }
     }
-    
+
     private func circleUpdate(args: Dictionary<String, Any>) -> Void {
         if let circlesToAdd: NSArray = args["circlesToAdd"] as? NSArray {
             self.addCircles(circleData: circlesToAdd)
@@ -346,7 +346,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             self.removeCircles(circleIds: circlesToRemove)
         }
     }
-    
+
     private func moveCamera(args: Dictionary<String, Any>) -> Void {
         let positionData: Dictionary<String, Any> = self.toPositionData(data: args["cameraUpdate"] as! Array<Any>, animated: true)
         if !positionData.isEmpty {
@@ -357,7 +357,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             self.mapView.setBounds(positionData, animated: false)
         }
     }
-    
+
     private func animateCamera(args: Dictionary<String, Any>) -> Void {
         let duration = Self.animationDuration(from: args["duration"])
         let cameraUpdate = args["cameraUpdate"] as! Array<Any>
@@ -598,7 +598,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         guard let ms = milliseconds, ms > 0 else { return nil }
         return TimeInterval(ms / 1000.0)
     }
-    
+
     // MARK: - Native camera orbit
 
     private func startOrbit(args: Dictionary<String, Any>) -> Void {
@@ -722,7 +722,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         let point = self.mapView.convert(CLLocationCoordinate2D(latitude: annotation[0] , longitude: annotation[1]), toPointTo: self.view())
         result(["point": [point.x, point.y]])
     }
-    
+
     private func toPositionData(data: Array<Any>, animated: Bool) -> Dictionary<String, Any> {
         var positionData: Dictionary<String, Any> = [:]
         if let update: String = data[0] as? String {
@@ -790,7 +790,7 @@ extension AppleMapController: MKMapViewDelegate {
         }
         self.channel.invokeMethod("camera#onIdle", arguments: "")
     }
-    
+
     // onMoveStarted
     public func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
         if self.isDrivingCamera { return }
@@ -807,7 +807,8 @@ extension AppleMapController: MKMapViewDelegate {
 
         guard shouldAnimate else { return }
 
-        let duration: TimeInterval = 0.25
+        // Members popping out of a tapped cluster: fade + scale-up.
+        let duration: TimeInterval = 0.28
         for view in views {
             let isClusterView = view is ClusterMarkerAnnotationView
             let isFlutterMember = view.annotation is FlutterAnnotation
@@ -815,8 +816,16 @@ extension AppleMapController: MKMapViewDelegate {
 
             let targetAlpha = view.alpha
             view.alpha = 0
-            UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut, .beginFromCurrentState]) {
+            view.transform = CGAffineTransform(scaleX: 0.55, y: 0.55)
+            UIView.animate(
+                withDuration: duration,
+                delay: 0,
+                usingSpringWithDamping: 0.78,
+                initialSpringVelocity: 0.55,
+                options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]
+            ) {
                 view.alpha = targetAlpha
+                view.transform = .identity
             }
         }
     }
@@ -829,7 +838,7 @@ extension AppleMapController: MKMapViewDelegate {
             arguments: ["trackingMode": index]
         )
     }
-    
+
     public func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if overlay is FlutterPolyline {
             return self.polylineRenderer(overlay: overlay)
@@ -862,23 +871,23 @@ extension AppleMapController {
         snapShotOptions.scale = UIScreen.main.scale
         snapShotOptions.showsBuildings = options.showBuildings
         snapShotOptions.showsPointsOfInterest = options.showPointsOfInterest
-        
+
         // Set MKMapSnapShotOptions to MKMapSnapShotter.
         snapShot = MKMapSnapshotter(options: snapShotOptions)
-        
+
         snapShot?.cancel()
-        
+
         if #available(iOS 10.0, *) {
             snapShot?.start { [weak self] snapshot, error in
                 guard let self = self else {
                     return
                 }
-                
+
                 guard let snapshot = snapshot, error == nil else {
                     onCompletion(nil, error)
                     return
                 }
-                
+
                 let image = UIGraphicsImageRenderer(size: self.snapShotOptions.size).image { [weak self] context in
                     guard let self = self else {
                         return
@@ -905,19 +914,19 @@ extension AppleMapController {
             }
         }
     }
-    
+
     private func drawAnnotations(annotation: FlutterAnnotation?, point: CGPoint) {
         guard annotation != nil else {
             return
         }
         let annotationView = self.getAnnotationView(annotation: annotation!)
-        
+
         var offsetPoint = point
-        
+
         offsetPoint.x -= annotationView.bounds.width / 2
         offsetPoint.y -= annotationView.bounds.height / 2
-        
-        
+
+
         if #available(iOS 11.0, *), annotationView is MKMarkerAnnotationView {
             annotationView.drawHierarchy(in: CGRect(x: offsetPoint.x, y: offsetPoint.y, width: annotationView.bounds.width, height: annotationView.bounds.height), afterScreenUpdates: true)
         } else {
@@ -927,16 +936,16 @@ extension AppleMapController {
             annotationImage?.draw(at: offsetPoint)
         }
     }
-    
+
     @available(iOS 10.0, *)
     private func drawOverlays(overlay: MKOverlay?, snapshot: MKMapSnapshotter.Snapshot, context: UIGraphicsRendererContext) {
         guard overlay != nil else {
             return
         }
-        
+
         if let flutterOverlay: FlutterOverlay = overlay as? FlutterOverlay {
             flutterOverlay.getCAShapeLayer(snapshot: snapshot).render(in: context.cgContext)
         }
-        
+
     }
 }

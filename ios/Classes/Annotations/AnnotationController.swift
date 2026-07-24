@@ -317,12 +317,12 @@ extension AppleMapController: AnnotationDelegate {
 
     @available(iOS 11.0, *)
     private func zoomToCluster(_ cluster: MKClusterAnnotation, animated: Bool) {
-        let coordinates = cluster.memberAnnotations.map { $0.coordinate }
-        guard !coordinates.isEmpty else { return }
+        let members = cluster.memberAnnotations
+        guard !members.isEmpty else { return }
 
         var mapRect = MKMapRect.null
-        for coordinate in coordinates {
-            let point = MKMapPoint(coordinate)
+        for annotation in members {
+            let point = MKMapPoint(annotation.coordinate)
             let rect = MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1)
             mapRect = mapRect.isNull ? rect : mapRect.union(rect)
         }
@@ -333,6 +333,7 @@ extension AppleMapController: AnnotationDelegate {
             bottom: Self.clusterZoomPadding,
             right: Self.clusterZoomPadding
         )
+        // Use MapKit's own camera animation so the cluster visibly zooms open.
         self.mapView.setVisibleMapRect(mapRect, edgePadding: padding, animated: animated)
     }
 

@@ -740,7 +740,7 @@ enum MarkerDialogBubbleBuilder {
         container.clipsToBounds = false
 
         let cloudPath = cloudBodyPath(width: width, height: height)
-        // Default glass: white 80% transparent; caller tint still applied.
+        // Default glass: white 95% transparent; caller tint still applied.
         let tint = annotation.dialogBackgroundColor
         let cloudGlass = makeGlassView(
             path: cloudPath,
@@ -760,7 +760,7 @@ enum MarkerDialogBubbleBuilder {
 
         let scrollView = UIScrollView(frame: textFrame)
         scrollView.backgroundColor = .clear
-        scrollView.showsVerticalScrollIndicator = needsScroll
+        scrollView.showsVerticalScrollIndicator = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.alwaysBounceVertical = needsScroll
         scrollView.isScrollEnabled = needsScroll
@@ -902,7 +902,7 @@ enum MarkerDialogBubbleBuilder {
         blur.frame = bounds
         blur.isUserInteractionEnabled = false
 
-        // Base tint (default: white ~80% transparent).
+        // Base tint (default: white ~95% transparent).
         let tintView = UIView(frame: blur.contentView.bounds)
         tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         tintView.backgroundColor = tint
