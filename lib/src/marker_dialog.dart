@@ -34,13 +34,13 @@ class MarkerDialog {
     this.gapAboveMarker = 4,
     this.marqueeSpeed = 16,
     this.style = MarkerDialogStyle.pill,
-  }) : assert(width > 0 || style == MarkerDialogStyle.cloud),
-       assert(height > 0 || style == MarkerDialogStyle.cloud),
-       assert(width >= 0),
-       assert(height >= 0),
-       assert(fontSize > 0),
-       assert(horizontalPadding >= 0),
-       assert(marqueeSpeed > 0);
+  })  : assert(width > 0 || style == MarkerDialogStyle.cloud),
+        assert(height > 0 || style == MarkerDialogStyle.cloud),
+        assert(width >= 0),
+        assert(height >= 0),
+        assert(fontSize > 0),
+        assert(horizontalPadding >= 0),
+        assert(marqueeSpeed > 0);
 
   /// Text shown inside the bubble. Empty / whitespace-only → dialog is hidden.
   final String text;
@@ -114,8 +114,9 @@ class MarkerDialog {
         painter.width.clamp(24.0, cloudMaxTextWidth).toDouble();
     final double fullH = painter.height;
     final double lineH = fontSize * 1.15;
-    final double visibleH =
-        fullH < lineH * cloudMaxVisibleLines ? fullH : lineH * cloudMaxVisibleLines;
+    final double visibleH = fullH < lineH * cloudMaxVisibleLines
+        ? fullH
+        : lineH * cloudMaxVisibleLines;
     final double cloudW = (textW + horizontalPadding * 2).clamp(52.0, 200.0);
     final double lobeExtra = visibleH * 0.18 > 6 ? visibleH * 0.18 : 6;
     final double cloudH = (visibleH + vPad * 2 + lobeExtra).clamp(36.0, 140.0);
@@ -127,8 +128,8 @@ class MarkerDialog {
       'text': _resolvedText,
       'width': width,
       'height': height,
-      'backgroundColor': backgroundColor.value,
-      'textColor': textColor.value,
+      'backgroundColor': backgroundColor.toARGB32(),
+      'textColor': textColor.toARGB32(),
       'fontSize': fontSize,
       'horizontalPadding': horizontalPadding,
       'gapAboveMarker': gapAboveMarker,
@@ -179,16 +180,21 @@ class MarkerDialog {
 class CloudDialogBox extends MarkerDialog {
   const CloudDialogBox({
     required String text,
+
     /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
     double width = 0,
+
     /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
     double height = 0,
+
     /// White ~95% transparent glass tint.
     Color backgroundColor = const Color(0x0DFFFFFF),
+
     /// Text / font color inside the cloud. Defaults to black.
     Color textColor = Colors.black,
     double fontSize = 12,
     double horizontalPadding = 4,
+
     /// Slight overlap so the thought-dot still kisses the marker.
     double gapAboveMarker = -5,
     double marqueeSpeed = 16,

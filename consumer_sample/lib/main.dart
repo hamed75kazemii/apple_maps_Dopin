@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
 
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:flutter/foundation.dart'
@@ -34,41 +33,48 @@ class MapSmokeTestScreen extends StatefulWidget {
   State<MapSmokeTestScreen> createState() => _MapSmokeTestScreenState();
 }
 
-class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
-    with SingleTickerProviderStateMixin {
+class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
   AppleMapController? _controller;
-  String _status = 'Tap a POI on the map to enter focus mode';
-  ApplePOIDetail? _focusedPoi;
-  String? _lastTappedMarkerId;
-  CameraPosition? _cameraBeforeFocus;
-  CameraPosition? _lastCameraPosition;
-  double? _focusZoom;
-  double _verticalScreenOffset = 0;
-
-  int _focusGeneration = 0;
-  bool _focusTransitionActive = false;
-  bool _gesturesLocked = false;
   bool _followMyLocation = false;
-  Completer<void>? _cameraIdleCompleter;
+  Set<Annotation> _annotations = <Annotation>{};
+  Timer? _dialogMarkerTimer;
 
-  static const Duration _focusFlyDuration = Duration(milliseconds: 420);
   static const Duration _dialogMarkerDelay = Duration(seconds: 1);
-
   static const LatLng _dialogMarkerPosition = LatLng(34.0530, -118.2420);
   static const LatLng _cloudDialogMarkerPosition = LatLng(34.0530, -118.2405);
-
   static const CameraPosition _losAngeles = CameraPosition(
     target: _dialogMarkerPosition,
     zoom: 16,
     pitch: 60,
   );
-
   static const MarkerShadow _demoShadow = MarkerShadow();
 
-  static final Annotation _dialogDemoMarker = Annotation(
+  @override
+  void initState() {
+    super.initState();
+    _dialogMarkerTimer = Timer(_dialogMarkerDelay, _showDialogMarkers);
+  }
+
+  @override
+  void dispose() {
+    _dialogMarkerTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showDialogMarkers() {
+    if (!mounted) return;
+    setState(() {
+      _annotations = <Annotation>{
+        _dialogDemoMarker(),
+        _cloudDialogDemoMarker(),
+      };
+    });
+  }
+
+  Annotation _dialogDemoMarker() => Annotation(
     annotationId: const AnnotationId('dialog_demo'),
     position: _dialogMarkerPosition,
-    onTap: () {},
+    onTap: () => unawaited(_focusOnMarker(_dialogMarkerPosition)),
     shadow: _demoShadow,
     dopinMarker: const DopinMarker(
       imageUrls: <String>['https://i.pravatar.cc/150?img=12'],
@@ -89,14 +95,13 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     ),
   );
 
-  static final Annotation _cloudDialogDemoMarker = Annotation(
+  Annotation _cloudDialogDemoMarker() => Annotation(
     annotationId: const AnnotationId('cloud_dialog_demo'),
     position: _cloudDialogMarkerPosition,
-    onTap: () {},
+    onTap: () => unawaited(_focusOnMarker(_cloudDialogMarkerPosition)),
     shadow: _demoShadow,
     dopinMarker: const DopinMarker(
       imageUrls: <String>['https://i.pravatar.cc/150?img=32'],
-      //   label: 'dopin',
       width: 46,
       height: 46,
       borderWidth: 3,
@@ -115,221 +120,19 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
     ),
   );
 
-  static const double _focusPitchMin = 50;
-  static const double _focusPitchMax = 60;
-  static const double _focusPitchPeriodSeconds = 10;
-  static const double _focusOrbitDegreesPerSecond = 10;
-  static const double _minFocusZoom = 17;
-
-  bool get _isFocused => _focusedPoi != null;
-
-  Set<Annotation> _annotations = <Annotation>{};
-  Timer? _dialogMarkerTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _lastCameraPosition = _losAngeles;
-    _status = 'مارکر دیالوگ بعد از ۱ ثانیه ظاهر می‌شود';
-    _dialogMarkerTimer = Timer(_dialogMarkerDelay, _showDialogMarker);
-  }
-
-  void _showDialogMarker() {
-    if (!mounted) return;
-    setState(() {
-      _annotations = <Annotation>{_dialogDemoMarker, _cloudDialogDemoMarker};
-      _status = 'مارکر دیالوگ و کلاد دیالوگ نمایش داده شد';
-    });
-  }
-
-  @override
-  void dispose() {
-    _dialogMarkerTimer?.cancel();
-    _stopFocusOrbit();
-    super.dispose();
-  }
-
-  void _onCameraIdle() {
-    _cameraIdleCompleter?.complete();
-    _cameraIdleCompleter = null;
-  }
-
-  void _onCameraMove(CameraPosition position) {
-    // Ignore orbit/focus-driven moves so the pre-focus bearing/pitch are preserved.
-    if (_isFocused || _focusTransitionActive) return;
-    _lastCameraPosition = position;
-  }
-
-  Future<void> _waitForCameraIdle() async {
-    final completer = Completer<void>();
-    _cameraIdleCompleter = completer;
-    await completer.future.timeout(
-      _focusFlyDuration + const Duration(milliseconds: 380),
-      onTimeout: () {},
-    );
-  }
-
-  EdgeInsets _focusPadding(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height;
-    return EdgeInsets.only(top: height * 0.05, bottom: height * 0.52);
-  }
-
-  Future<void> _startFocusOrbit(ApplePOIDetail poi) async {
-    final controller = _controller;
-    if (controller == null || !_isFocused) return;
-
-    final center = LatLng(poi.latitude, poi.longitude);
-    final zoom = _focusZoom ?? _minFocusZoom;
-
-    await controller.startCameraOrbit(
-      center: center,
-      zoom: zoom,
-      pitch: _focusPitchMin,
-      degreesPerSecond: _focusOrbitDegreesPerSecond,
-      verticalScreenOffset: _verticalScreenOffset,
-      startBearing: 0,
-      pitchMin: _focusPitchMin,
-      pitchMax: _focusPitchMax,
-      pitchPeriodSeconds: _focusPitchPeriodSeconds,
-    );
-  }
-
-  Future<void> _stopFocusOrbit() async {
-    await _controller?.stopCameraOrbit();
-  }
-
-  Future<void> _focusOnPoi(ApplePOIDetail poi) async {
+  /// Moves the camera so [position] sits near the top-left of the screen.
+  Future<void> _focusOnMarker(LatLng position) async {
     final controller = _controller;
     if (controller == null) return;
 
-    final generation = ++_focusGeneration;
-    final location = LatLng(poi.latitude, poi.longitude);
-
-    if (!_isFocused) {
-      if (_lastCameraPosition != null) {
-        _cameraBeforeFocus = _lastCameraPosition;
-      } else {
-        final zoom = await controller.getZoomLevel();
-        final region = await controller.getVisibleRegion();
-        final center = LatLng(
-          (region.southwest.latitude + region.northeast.latitude) / 2,
-          (region.southwest.longitude + region.northeast.longitude) / 2,
-        );
-        _cameraBeforeFocus = CameraPosition(
-          target: center,
-          zoom: zoom ?? _losAngeles.zoom,
-        );
-      }
-    }
-
-    final padding = _focusPadding(context);
-    _verticalScreenOffset = MapCameraPadding.verticalScreenOffset(padding);
-
-    final currentZoom = await controller.getZoomLevel();
-    final focusZoom = (currentZoom ?? _minFocusZoom)
-        .clamp(_minFocusZoom, 20)
-        .toDouble();
-    _focusZoom = focusZoom;
-
-    // ── Phase 1: pre-focus fly ──────────────────────────────────────────────
-    // Lock gestures and fly the camera. The focus sheet stays hidden until the
-    // camera settles (same two-phase sequence as Dopin home_map).
-    await _stopFocusOrbit();
-    setState(() {
-      _focusTransitionActive = true;
-      _gesturesLocked = true;
-      _lastTappedMarkerId = null;
-    });
-
-    try {
-      await runOrbitFrameCameraTransition(
-        vsync: this,
-        controller: controller,
-        anchor: location,
-        target: OrbitFrameCameraTarget(
-          padding: padding,
-          zoom: focusZoom,
-          pitch: _focusPitchMin,
-        ),
-        start: _cameraBeforeFocus ?? _lastCameraPosition,
-        duration: _focusFlyDuration,
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _focusTransitionActive = false);
-      }
-    }
-
-    if (generation != _focusGeneration || !mounted) return;
-
-    // ── Phase 2: activate focus mode ────────────────────────────────────────
-    // Camera is at the focus position — show the sheet, then start orbit.
-    setState(() {
-      _focusedPoi = poi;
-      _status = 'Focus mode — camera orbiting POI';
-    });
-    await _startFocusOrbit(poi);
-  }
-
-  Future<void> _clearFocus() async {
-    _focusGeneration++;
-    await _stopFocusOrbit();
-
-    final savedCamera = _cameraBeforeFocus;
-    _cameraBeforeFocus = null;
-    _focusZoom = null;
-    _verticalScreenOffset = 0;
-
-    setState(() {
-      _focusedPoi = null;
-      _gesturesLocked = true;
-      _focusTransitionActive = true;
-      _status = 'Tap a POI on the map to enter focus mode';
-    });
-
-    final controller = _controller;
-    if (controller != null && savedCamera != null) {
-      try {
-        await controller.animateCamera(
-          CameraUpdate.newCameraPosition(savedCamera),
-        );
-        await _waitForCameraIdle();
-      } finally {
-        if (mounted) {
-          setState(() {
-            _focusTransitionActive = false;
-            _gesturesLocked = false;
-          });
-        }
-      }
-    } else if (mounted) {
-      setState(() {
-        _focusTransitionActive = false;
-        _gesturesLocked = false;
-      });
-    }
-  }
-
-  void _onMarkerTap(String id) {
-    log('onMarkerTap: $id');
-    if (_isFocused) {
-      unawaited(_clearFocus());
-    }
-    setState(() {
-      _lastTappedMarkerId = id;
-      _status = 'Marker tapped: $id';
-    });
-  }
-
-  void _onPoiTap(ApplePOIDetail poi) {
-    log('onPOITap: ${poi.name}');
-    unawaited(_focusOnPoi(poi));
-  }
-
-  void _onMapTap(LatLng _) {
-    if (_isFocused) {
-      unawaited(_clearFocus());
-    }
+    final size = MediaQuery.sizeOf(context);
+    await controller.setCameraOffset(
+      Offset(size.width * 0.28, size.height * 0.32),
+    );
+    await controller.animateCamera(
+      CameraUpdate.newLatLngZoom(position, 17),
+      duration: const Duration(milliseconds: 500),
+    );
   }
 
   void _onTrackingModeChanged(TrackingMode mode) {
@@ -341,15 +144,13 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
   Future<void> _onGoToMyLocation() async {
     final controller = _controller;
     if (controller == null) return;
-    if (_isFocused) {
-      await _clearFocus();
-    }
 
     if (_followMyLocation) {
       await controller.stopFollowingMyLocation();
       return;
     }
 
+    await controller.clearCameraOffset();
     await controller.goToMyLocation();
     await controller.followMyLocation();
   }
@@ -372,279 +173,47 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen>
       );
     }
 
-    final gesturesEnabled = !_gesturesLocked && !_focusTransitionActive;
-
-    return PopScope(
-      canPop: !_isFocused && !_focusTransitionActive,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _isFocused) {
-          unawaited(_clearFocus());
-        }
-      },
-      child: Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            AppleMap(
-              initialCameraPosition: _losAngeles,
-              mapType: MapType.mutedStandard,
-              elevationStyle: ElevationStyle.realistic,
-              clusteringEnabled: true,
-              showPointsOfInterest: false,
-              globeAtMinZoom: true,
-              minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
-              scrollGesturesEnabled: gesturesEnabled,
-              rotateGesturesEnabled: gesturesEnabled,
-              zoomGesturesEnabled: gesturesEnabled,
-              pitchGesturesEnabled: gesturesEnabled,
-              onMapCreated: (AppleMapController controller) {
-                _controller = controller;
-              },
-              annotations: _annotations,
-              onPOITap: _onPoiTap,
-              onTap: _onMapTap,
-              onCameraMove: _onCameraMove,
-              onCameraIdle: _onCameraIdle,
-              onTrackingModeChanged: _onTrackingModeChanged,
-              myLocationMarker: const MyLocationMarker(
-                label: 'Me',
-                imageUrl: 'https://i.pravatar.cc/150?img=12',
-                dialog: CloudDialogBox(text: "I'm ", textColor: Colors.red),
-              ),
-              myLocationButtonEnabled: false,
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          AppleMap(
+            initialCameraPosition: _losAngeles,
+            mapType: MapType.mutedStandard,
+            elevationStyle: ElevationStyle.realistic,
+            clusteringEnabled: true,
+            showPointsOfInterest: false,
+            globeAtMinZoom: true,
+            minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
+            onMapCreated: (controller) => _controller = controller,
+            annotations: _annotations,
+            onTrackingModeChanged: _onTrackingModeChanged,
+            myLocationMarker: const MyLocationMarker(
+              label: 'Me',
+              imageUrl: 'https://i.pravatar.cc/150?img=12',
+              dialog: CloudDialogBox(text: "I'm ", textColor: Colors.red),
             ),
-
-            Positioned(
-              right: 16,
-              bottom: MediaQuery.paddingOf(context).bottom + 24,
-              child: FloatingActionButton.small(
-                heroTag: 'go_to_my_location',
-                tooltip: _followMyLocation ? 'توقف فالو' : 'فالو موقعیت من',
-                backgroundColor: _followMyLocation
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-                foregroundColor: _followMyLocation
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : null,
-                onPressed: _onGoToMyLocation,
-                child: Icon(
-                  _followMyLocation ? Icons.gps_fixed : Icons.my_location,
-                ),
-              ),
-            ),
-
-            _FocusSheetSwitcher(
-              poi: _focusedPoi,
-              onClose: () => unawaited(_clearFocus()),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Slides the focus sheet up after the pre-focus camera fly (mirrors Dopin [FocusSheet]).
-class _FocusSheetSwitcher extends StatelessWidget {
-  const _FocusSheetSwitcher({required this.poi, required this.onClose});
-
-  final ApplePOIDetail? poi;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      reverseDuration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) {
-        final slide = Tween<Offset>(
-          begin: const Offset(0, 0.18),
-          end: Offset.zero,
-        ).animate(animation);
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(position: slide, child: child),
-        );
-      },
-      layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          alignment: Alignment.bottomCenter,
-          children: [...previousChildren, ?currentChild],
-        );
-      },
-      child: poi != null
-          ? _PoiFocusSheet(
-              key: ValueKey(
-                'focus-${poi!.latitude}-${poi!.longitude}-${poi!.name}',
-              ),
-              poi: poi!,
-              onClose: onClose,
-            )
-          : const SizedBox.shrink(key: ValueKey('focus-sheet-empty')),
-    );
-  }
-}
-
-class _PoiFocusSheet extends StatelessWidget {
-  const _PoiFocusSheet({required this.poi, required this.onClose, super.key});
-
-  final ApplePOIDetail poi;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: 8,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      color: Theme.of(context).colorScheme.surface,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Focus mode',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Exit focus',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              _PoiInfoCard(poi: poi),
-            ],
+            myLocationButtonEnabled: false,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PoiInfoCard extends StatelessWidget {
-  const _PoiInfoCard({required this.poi});
-
-  final ApplePOIDetail poi;
-
-  Color? get _iconBackground {
-    final int? argb = poi.iconColor;
-    if (argb == null) return null;
-    return Color(argb);
-  }
-
-  IconData _fallbackIcon() {
-    switch (poi.icon ?? poi.category?.toLowerCase()) {
-      case 'cafe':
-        return Icons.local_cafe;
-      case 'restaurant':
-        return Icons.restaurant;
-      case 'store':
-      case 'foodmarket':
-        return Icons.store;
-      case 'museum':
-        return Icons.museum;
-      case 'park':
-        return Icons.park;
-      case 'hotel':
-        return Icons.hotel;
-      case 'gasstation':
-        return Icons.local_gas_station;
-      case 'hospital':
-        return Icons.local_hospital;
-      case 'school':
-      case 'university':
-        return Icons.school;
-      default:
-        return Icons.place;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Color? bg = _iconBackground;
-    final png = poi.iconPng;
-
-    return Material(
-      elevation: 1,
-      borderRadius: BorderRadius.circular(12),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: bg ?? Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: png != null
-                  ? Image.memory(
-                      png,
-                      width: 36,
-                      height: 36,
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
-                    )
-                  : Icon(
-                      _fallbackIcon(),
-                      size: 28,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    poi.name ?? 'No name',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (poi.category != null)
-                    Text(
-                      poi.category!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${poi.latitude.toStringAsFixed(5)}, '
-                    '${poi.longitude.toStringAsFixed(5)}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
+          Positioned(
+            right: 16,
+            bottom: MediaQuery.paddingOf(context).bottom + 24,
+            child: FloatingActionButton.small(
+              heroTag: 'go_to_my_location',
+              tooltip: _followMyLocation ? 'توقف فالو' : 'فالو موقعیت من',
+              backgroundColor: _followMyLocation
+                  ? Theme.of(context).colorScheme.primary
+                  : null,
+              foregroundColor: _followMyLocation
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : null,
+              onPressed: _onGoToMyLocation,
+              child: Icon(
+                _followMyLocation ? Icons.gps_fixed : Icons.my_location,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

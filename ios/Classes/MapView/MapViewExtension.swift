@@ -315,18 +315,22 @@ public extension MKMapView {
     /// shifts the camera target opposite the heading so the orbit center appears
     /// that many points above the screen center (mirrors the focus-padding
     /// emulation previously done in Dart).
-    func setOrbitCamera(center: CLLocationCoordinate2D, zoomLevel: Double, pitch: CGFloat, heading: CLLocationDirection, verticalScreenOffset: Double) {
+    ///
+    /// `horizontalScreenOffset` is expressed in screen points: a positive value
+    /// shifts the camera target toward screen-right so the focus appears that
+    /// many points left of the screen center.
+    func setOrbitCamera(center: CLLocationCoordinate2D, zoomLevel: Double, pitch: CGFloat, heading: CLLocationDirection, verticalScreenOffset: Double, horizontalScreenOffset: Double = 0) {
         Holder._zoomLevel = zoomLevel
         Holder._pitch = pitch
         Holder._heading = heading
 
-        var targetCenter = center
-        if abs(verticalScreenOffset) > 0.5 {
-            let metersPerPixel = 156543.03392 * cos(center.latitude * .pi / 180.0) / pow(2.0, zoomLevel)
-            let offsetMeters = verticalScreenOffset * metersPerPixel
-            let offsetBearing = (heading + 180.0).truncatingRemainder(dividingBy: 360.0)
-            targetCenter = MKMapView.offsetCoordinate(center, distanceMeters: offsetMeters, bearingDegrees: offsetBearing)
-        }
+        let targetCenter = MKMapView.focusLookingAtCenter(
+            center: center,
+            zoomLevel: zoomLevel,
+            heading: heading,
+            verticalScreenOffset: verticalScreenOffset,
+            horizontalScreenOffset: horizontalScreenOffset
+        )
 
         if #available(iOS 9.0, *) {
             let zoomL = min(zoomLevel, 28)
@@ -336,6 +340,65 @@ public extension MKMapView {
         } else {
             setCenterCoordinateRegion(centerCoordinate: targetCenter, zoomLevel: zoomLevel, animated: false)
         }
+    }
+
+    /// Geographic looking-at center that places `center` at the given screen
+    /// offsets from the visual midpoint.
+    static func focusLookingAtCenter(
+        center: CLLocationCoordinate2D,
+        zoomLevel: Double,
+        heading: CLLocationDirection,
+        verticalScreenOffset: Double,
+        horizontalScreenOffset: Double = 0
+    ) -> CLLocationCoordinate2D {
+        var targetCenter = center
+        let hasVertical = abs(verticalScreenOffset) > 0.5
+        let hasHorizontal = abs(horizontalScreenOffset) > 0.5
+        guard hasVertical || hasHorizontal else { return targetCenter }
+
+        let metersPerPixel = 156543.03392 * cos(center.latitude * .pi / 180.0) / pow(2.0, zoomLevel)
+
+        if hasVertical {
+            let offsetMeters = verticalScreenOffset * metersPerPixel
+            let offsetBearing = (heading + 180.0).truncatingRemainder(dividingBy: 360.0)
+            targetCenter = MKMapView.offsetCoordinate(targetCenter, distanceMeters: offsetMeters, bearingDegrees: offsetBearing)
+        }
+        if hasHorizontal {
+            let offsetMeters = horizontalScreenOffset * metersPerPixel
+            let offsetBearing = (heading + 90.0).truncatingRemainder(dividingBy: 360.0)
+            targetCenter = MKMapView.offsetCoordinate(targetCenter, distanceMeters: offsetMeters, bearingDegrees: offsetBearing)
+        }
+        return targetCenter
+    }
+
+    /// Inverse of [focusLookingAtCenter]: recovers the logical focus point from
+    /// the camera's looking-at center when focus offsets are active.
+    static func logicalFocusCenter(
+        lookingAt: CLLocationCoordinate2D,
+        zoomLevel: Double,
+        heading: CLLocationDirection,
+        verticalScreenOffset: Double,
+        horizontalScreenOffset: Double = 0
+    ) -> CLLocationCoordinate2D {
+        var center = lookingAt
+        let hasVertical = abs(verticalScreenOffset) > 0.5
+        let hasHorizontal = abs(horizontalScreenOffset) > 0.5
+        guard hasVertical || hasHorizontal else { return center }
+
+        let metersPerPixel = 156543.03392 * cos(lookingAt.latitude * .pi / 180.0) / pow(2.0, zoomLevel)
+
+        // Reverse horizontal first (opposite order of the forward transform).
+        if hasHorizontal {
+            let offsetMeters = horizontalScreenOffset * metersPerPixel
+            let offsetBearing = (heading - 90.0 + 360.0).truncatingRemainder(dividingBy: 360.0)
+            center = MKMapView.offsetCoordinate(center, distanceMeters: offsetMeters, bearingDegrees: offsetBearing)
+        }
+        if hasVertical {
+            let offsetMeters = verticalScreenOffset * metersPerPixel
+            let offsetBearing = heading.truncatingRemainder(dividingBy: 360.0)
+            center = MKMapView.offsetCoordinate(center, distanceMeters: offsetMeters, bearingDegrees: offsetBearing)
+        }
+        return center
     }
 
     /// Returns the coordinate reached by travelling `distanceMeters` along the

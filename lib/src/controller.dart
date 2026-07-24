@@ -163,11 +163,75 @@ class AppleMapController {
     );
   }
 
+  Offset _cameraOffset = Offset.zero;
+
+  /// The current persistent camera screen offset.
+  ///
+  /// See [setCameraOffset] for axis conventions.
+  Offset get cameraOffset => _cameraOffset;
+
+  /// Sets a persistent screen-space offset for camera targets.
+  ///
+  /// After calling this, every [animateCamera] / [moveCamera] that moves to a
+  /// [LatLng] places that point at the given screen position instead of the
+  /// geometric center of the map. You do not need to pass padding on each move.
+  ///
+  /// ## Offset axes (screen points)
+  ///
+  /// | Component | Positive direction |
+  /// |-----------|--------------------|
+  /// | [Offset.dx] | Focus appears **left** of screen center |
+  /// | [Offset.dy] | Focus appears **above** screen center |
+  ///
+  /// Use [Offset.zero] (or [clearCameraOffset]) to restore centering.
+  ///
+  /// ## Example
+  ///
+  /// Place the target near the top-left of the screen, then animate to it:
+  ///
+  /// ```dart
+  /// final size = MediaQuery.sizeOf(context);
+  /// await controller.setCameraOffset(
+  ///   Offset(size.width * 0.28, size.height * 0.32),
+  /// );
+  /// await controller.animateCamera(
+  ///   CameraUpdate.newLatLngZoom(target, 17),
+  ///   duration: const Duration(milliseconds: 500),
+  /// );
+  /// ```
+  ///
+  /// ## Notes
+  ///
+  /// * Applies to `newLatLng`, `newLatLngZoom`, `newCameraPosition`, and zoom
+  ///   updates driven through [animateCamera] / [moveCamera].
+  /// * Does not affect [CameraUpdate.newLatLngBounds] (that API has its own
+  ///   edge padding).
+  /// * Orbit APIs ([setOrbitFrame], [startCameraOrbit]) still take their own
+  ///   `verticalScreenOffset` / padding and are independent of this value.
+  /// * Changing the offset alone does not move the camera; call
+  ///   [animateCamera] or [moveCamera] afterward.
+  Future<void> setCameraOffset(Offset offset) async {
+    _cameraOffset = offset;
+    await channel.invokeMethod<void>('camera#setFocusOffset', <String, dynamic>{
+      'vertical': offset.dy,
+      'horizontal': offset.dx,
+    });
+  }
+
+  /// Clears the offset set by [setCameraOffset] (`Offset.zero`).
+  ///
+  /// Subsequent [animateCamera] / [moveCamera] calls center the target on
+  /// screen again. Does not by itself animate the camera.
+  Future<void> clearCameraOffset() => setCameraOffset(Offset.zero);
+
   /// Starts an animated change of the map camera position.
   ///
   /// When [duration] is provided, the platform drives a frame-by-frame camera
   /// transition over that interval; otherwise the system default animation
   /// timing is used.
+  ///
+  /// If a camera [offset] was set via [setCameraOffset], the target [LatLng]
+  /// is placed at that screen position instead of the geometric center.
   ///
   /// The returned [Future] completes after the change has been started on the
   /// platform side.
@@ -221,6 +285,9 @@ class AppleMapController {
   }
 
   /// Changes the map camera position without animating the transition.
+  ///
+  /// If a camera offset was set via [setCameraOffset], the target [LatLng] is
+  /// placed at that screen position instead of the geometric center.
   ///
   /// The returned [Future] completes after the change has been made on the
   /// platform side.

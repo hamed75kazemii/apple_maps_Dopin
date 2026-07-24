@@ -30,6 +30,12 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     private var orbitDegreesPerSecond: Double = 0
     private var orbitVerticalScreenOffset: Double = 0
     private var orbitLastTimestamp: CFTimeInterval = 0
+
+    /// Persistent screen-space focus offset for moveCamera / animateCamera.
+    /// Positive vertical = focus appears above screen center; positive horizontal
+    /// = focus appears left of screen center.
+    private var cameraFocusVerticalOffset: Double = 0
+    private var cameraFocusHorizontalOffset: Double = 0
     // Sinusoidal pitch oscillation: when orbitPitchMax > orbitPitchMin the pitch
     // sweeps between the two over orbitPitchPeriod seconds while the orbit runs.
     private var orbitPitchMin: Double = 0
@@ -227,6 +233,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     self.setOrbitFrame(args: args)
                     result(nil)
                     break
+                case "camera#setFocusOffset":
+                    self.setFocusOffset(args: args)
+                    result(nil)
+                    break
                 case "camera#convert":
                     self.cameraConvert(args: args, result: result)
                     break
@@ -347,14 +357,28 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         }
     }
 
+    private var hasFocusOffset: Bool {
+        return abs(self.cameraFocusVerticalOffset) > 0.5 || abs(self.cameraFocusHorizontalOffset) > 0.5
+    }
+
+    private func setFocusOffset(args: Dictionary<String, Any>) -> Void {
+        self.cameraFocusVerticalOffset = args["vertical"] as? Double ?? 0
+        self.cameraFocusHorizontalOffset = args["horizontal"] as? Double ?? 0
+    }
+
     private func moveCamera(args: Dictionary<String, Any>) -> Void {
-        let positionData: Dictionary<String, Any> = self.toPositionData(data: args["cameraUpdate"] as! Array<Any>, animated: true)
+        let cameraUpdate = args["cameraUpdate"] as! Array<Any>
+        let positionData: Dictionary<String, Any> = self.toPositionData(data: cameraUpdate, animated: true)
         if !positionData.isEmpty {
-            guard let _ = positionData["moveToBounds"] else {
-                self.mapView.setCenterCoordinate(positionData, animated: false)
+            guard positionData["moveToBounds"] == nil else {
+                self.mapView.setBounds(positionData, animated: false)
                 return
             }
-            self.mapView.setBounds(positionData, animated: false)
+            if self.hasFocusOffset, let target = self.resolveCameraTarget(from: cameraUpdate) {
+                self.applyFocusCamera(target, animated: false)
+                return
+            }
+            self.mapView.setCenterCoordinate(positionData, animated: false)
         }
     }
 
@@ -375,12 +399,48 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 
         let positionData: Dictionary<String, Any> = self.toPositionData(data: cameraUpdate, animated: true)
         if !positionData.isEmpty {
-            guard let _ = positionData["moveToBounds"] else {
-                self.mapView.setCenterCoordinate(positionData, animated: true)
+            guard positionData["moveToBounds"] == nil else {
+                self.mapView.setBounds(positionData, animated: true)
                 return
             }
-            self.mapView.setBounds(positionData, animated: true)
+            if self.hasFocusOffset, let target = self.resolveCameraTarget(from: cameraUpdate) {
+                self.applyFocusCamera(target, animated: true)
+                return
+            }
+            self.mapView.setCenterCoordinate(positionData, animated: true)
         }
+    }
+
+    /// Applies [target] with the persistent focus offset. Non-animated updates
+    /// go through `setOrbitCamera`; animated updates bake the offset into the
+    /// looking-at center and use MapKit's default camera animation.
+    private func applyFocusCamera(_ target: CameraTargetState, animated: Bool) -> Void {
+        if !animated {
+            self.mapView.setOrbitCamera(
+                center: target.center,
+                zoomLevel: target.zoom,
+                pitch: target.pitch,
+                heading: target.heading,
+                verticalScreenOffset: self.cameraFocusVerticalOffset,
+                horizontalScreenOffset: self.cameraFocusHorizontalOffset
+            )
+            return
+        }
+
+        let lookingAt = MKMapView.focusLookingAtCenter(
+            center: target.center,
+            zoomLevel: target.zoom,
+            heading: target.heading,
+            verticalScreenOffset: self.cameraFocusVerticalOffset,
+            horizontalScreenOffset: self.cameraFocusHorizontalOffset
+        )
+        let positionData: Dictionary<String, Any> = [
+            "target": [lookingAt.latitude, lookingAt.longitude],
+            "zoom": target.zoom,
+            "pitch": target.pitch,
+            "heading": target.heading
+        ]
+        self.mapView.setCenterCoordinate(positionData, animated: true)
     }
 
     private func boundsPositionData(from data: Array<Any>) -> Dictionary<String, Any>? {
@@ -392,7 +452,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 
     private func resolveCameraTarget(from data: Array<Any>) -> CameraTargetState? {
         guard let update = data[0] as? String else { return nil }
-        let currentCenter = self.mapView.camera.centerCoordinate
+        let currentCenter = self.logicalCameraCenter()
         let currentZoom = self.mapView.calculatedZoomLevel
         let currentPitch = CGFloat(self.mapView.camera.pitch)
         let currentHeading = self.mapView.actualHeading
@@ -487,9 +547,19 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         return CameraTargetState(center: center, zoom: zoom, pitch: pitch, heading: heading)
     }
 
+    private func logicalCameraCenter() -> CLLocationCoordinate2D {
+        return MKMapView.logicalFocusCenter(
+            lookingAt: self.mapView.camera.centerCoordinate,
+            zoomLevel: self.mapView.calculatedZoomLevel,
+            heading: self.mapView.actualHeading,
+            verticalScreenOffset: self.cameraFocusVerticalOffset,
+            horizontalScreenOffset: self.cameraFocusHorizontalOffset
+        )
+    }
+
     private func currentCameraTargetState() -> CameraTargetState {
         return CameraTargetState(
-            center: self.mapView.camera.centerCoordinate,
+            center: self.logicalCameraCenter(),
             zoom: self.mapView.calculatedZoomLevel,
             pitch: CGFloat(self.mapView.camera.pitch),
             heading: self.mapView.actualHeading
@@ -547,7 +617,8 @@ public class AppleMapController: NSObject, FlutterPlatformView {
             zoomLevel: zoom,
             pitch: pitch,
             heading: heading,
-            verticalScreenOffset: 0
+            verticalScreenOffset: self.cameraFocusVerticalOffset,
+            horizontalScreenOffset: self.cameraFocusHorizontalOffset
         )
     }
 
@@ -555,7 +626,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.applyCameraTransitionFrame(progress: 1)
         self.invalidateCameraAnimation()
 
-        let center = self.mapView.region.center
+        let center = self.logicalCameraCenter()
         self.channel.invokeMethod("camera#onMove", arguments: ["position": [
             "heading": self.mapView.actualHeading,
             "target": [center.latitude, center.longitude],
