@@ -545,6 +545,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.dialogTextColor = annotation.dialogTextColor
                 oldAnnotation.dialogFontSize = annotation.dialogFontSize
                 oldAnnotation.dialogHorizontalPadding = annotation.dialogHorizontalPadding
+                oldAnnotation.dialogVerticalPadding = annotation.dialogVerticalPadding
                 oldAnnotation.dialogGapAboveMarker = annotation.dialogGapAboveMarker
                 oldAnnotation.dialogMarqueeSpeed = annotation.dialogMarqueeSpeed
                 oldAnnotation.dialogStyle = annotation.dialogStyle

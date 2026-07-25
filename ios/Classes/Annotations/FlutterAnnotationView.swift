@@ -687,8 +687,10 @@ enum MarkerDialogBubbleBuilder {
     private static func buildCloudBubble(annotation: FlutterAnnotation) -> UIView {
         let text = clampCloudDialogText(annotation.dialogText)
         let font = roundedFont(size: annotation.dialogFontSize)
-        let hPad = max(2, annotation.dialogHorizontalPadding)
-        let vPad: CGFloat = 5
+        // User padding + clearance for the cloud's ~16pt corner radius so glyphs
+        // don't sit on the curved edge (bounds inset alone looks "stuck").
+        let hPad = cloudHorizontalContentInset(userPadding: annotation.dialogHorizontalPadding)
+        let vPad = max(0, annotation.dialogVerticalPadding)
 
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
@@ -740,7 +742,7 @@ enum MarkerDialogBubbleBuilder {
         container.clipsToBounds = false
 
         let cloudPath = cloudBodyPath(width: width, height: height)
-        // Default glass: white 95% transparent; caller tint still applied.
+        // Liquid Glass (iOS 26+) / frosted blur fallback; tint forced to ~90%.
         let tint = annotation.dialogBackgroundColor
         let cloudGlass = makeGlassView(
             path: cloudPath,
@@ -750,9 +752,12 @@ enum MarkerDialogBubbleBuilder {
         container.addSubview(cloudGlass)
 
         let lobeReserve = height * (6.0 / cloudDesignHeight)
-        let textTop = max(vPad, (height - lobeReserve - visibleTextHeight) / 2)
+        // Always keep top/bottom inset; center only within the remaining band.
+        let textBand = max(visibleTextHeight, height - lobeReserve - vPad * 2)
+        let textTop = vPad + max(0, (textBand - visibleTextHeight) / 2)
+        // Center the text column so leftover space from min cloud width is even.
         let textFrame = CGRect(
-            x: hPad,
+            x: max(hPad, (width - textWidth) / 2),
             y: textTop,
             width: textWidth,
             height: visibleTextHeight
@@ -781,7 +786,7 @@ enum MarkerDialogBubbleBuilder {
         label.preferredMaxLayoutWidth = textWidth
         scrollView.addSubview(label)
 
-        // Solid thought-dot (not glass).
+        // Solid thought-dot (opaque white — not glass).
         let dotRect = CGRect(
             x: (width - dotSize) / 2,
             y: height + dotGap,
@@ -789,7 +794,7 @@ enum MarkerDialogBubbleBuilder {
             height: dotSize
         )
         let dot = UIView(frame: dotRect)
-        dot.backgroundColor = UIColor.white.withAlphaComponent(0.8)
+        dot.backgroundColor = .white
         dot.layer.cornerRadius = dotSize / 2
         dot.isUserInteractionEnabled = false
         dot.layer.shadowColor = UIColor.black.cgColor
@@ -808,6 +813,18 @@ enum MarkerDialogBubbleBuilder {
         let visibleTextHeight: CGFloat
         let fullTextHeight: CGFloat
         let cloudSize: CGSize
+    }
+
+    /// Design corner radius of the cloud body (Figma path).
+    private static let cloudDesignCorner: CGFloat = 16
+
+    /// Horizontal inset for cloud text: [userPadding] plus clearance for the
+    /// rounded sides so lines don't kiss the curved edge.
+    private static func cloudHorizontalContentInset(userPadding: CGFloat) -> CGFloat {
+        let user = max(0, userPadding)
+        // ~half the design corner keeps wrapped lines inside the flat mid-body.
+        let shapeClearance = ceil(cloudDesignCorner * 0.5) // 8pt at design size
+        return user + shapeClearance
     }
 
     /// Sizes the cloud to the text. Text column is capped at [cloudMaxTextWidth].
@@ -860,11 +877,16 @@ enum MarkerDialogBubbleBuilder {
         if explicitWidth > 0 { cloudW = explicitWidth }
         if explicitHeight > 0 { cloudH = explicitHeight }
 
-        let finalTextW = max(minTextWidth, min(cloudMaxTextWidth, cloudW - hPad * 2))
+        // Keep the text column at the measured wrap width (don't stretch it when
+        // the cloud is raised to the minimum size) so side padding stays real.
+        let finalTextW = max(
+            minTextWidth,
+            min(wrapWidth, min(cloudMaxTextWidth, cloudW - hPad * 2))
+        )
         let lobeReserve = cloudH * (6.0 / cloudDesignHeight)
         let finalVisible = min(
             visibleTextHeight,
-            max(ceil(font.lineHeight), cloudH - lobeReserve - vPad)
+            max(ceil(font.lineHeight), cloudH - lobeReserve - vPad * 2)
         )
 
         return CloudTextLayout(
@@ -881,7 +903,7 @@ enum MarkerDialogBubbleBuilder {
         tint: UIColor
     ) -> UIView {
         // Host must stay fully opaque and unmasked — any superview mask/alpha
-        // on UIVisualEffectView kills live backdrop blur (Apple docs).
+        // on UIVisualEffectView kills live backdrop sampling (Apple docs).
         let host = UIView(frame: bounds)
         host.backgroundColor = .clear
         host.clipsToBounds = false
@@ -898,30 +920,38 @@ enum MarkerDialogBubbleBuilder {
         shadowLayer.shadowPath = path.cgPath
         host.layer.addSublayer(shadowLayer)
 
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .light))
-        blur.frame = bounds
-        blur.isUserInteractionEnabled = false
+        // Force ~90% opacity on the caller tint (Liquid Glass / fallback).
+        let glassTint = tintWithAlpha(tint, alpha: 0.90)
 
-        // Base tint (default: white ~95% transparent).
-        let tintView = UIView(frame: blur.contentView.bounds)
-        tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tintView.backgroundColor = tint
-        blur.contentView.addSubview(tintView)
+        let effectView: UIVisualEffectView
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect(style: .regular)
+            glass.isInteractive = false
+            glass.tintColor = glassTint
+            effectView = UIVisualEffectView(effect: glass)
+        } else {
+            // Pre–Liquid Glass: classic frosted blur + tint overlay.
+            effectView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
+            let tintView = UIView(frame: bounds)
+            tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            tintView.backgroundColor = glassTint
+            effectView.contentView.addSubview(tintView)
 
-        // Glass sheen: 15% white at -45°.
-        let sheen = CAGradientLayer()
-        sheen.frame = bounds
-        sheen.colors = [
-            UIColor.white.withAlphaComponent(0.15).cgColor,
-            UIColor.white.withAlphaComponent(0.0).cgColor,
-        ]
-        // -45° ≈ top-leading → bottom-trailing
-        sheen.startPoint = CGPoint(x: 0, y: 0)
-        sheen.endPoint = CGPoint(x: 1, y: 1)
-        blur.contentView.layer.addSublayer(sheen)
+            let sheen = CAGradientLayer()
+            sheen.frame = bounds
+            sheen.colors = [
+                UIColor.white.withAlphaComponent(0.15).cgColor,
+                UIColor.white.withAlphaComponent(0.0).cgColor,
+            ]
+            sheen.startPoint = CGPoint(x: 0, y: 0)
+            sheen.endPoint = CGPoint(x: 1, y: 1)
+            effectView.contentView.layer.addSublayer(sheen)
+        }
 
-        blur.mask = makePathImageMaskView(path: path, bounds: bounds)
-        host.addSubview(blur)
+        effectView.frame = bounds
+        effectView.isUserInteractionEnabled = false
+        effectView.mask = makePathImageMaskView(path: path, bounds: bounds)
+        host.addSubview(effectView)
 
         let border = CAShapeLayer()
         border.frame = bounds
@@ -932,6 +962,14 @@ enum MarkerDialogBubbleBuilder {
         host.layer.addSublayer(border)
 
         return host
+    }
+
+    private static func tintWithAlpha(_ color: UIColor, alpha: CGFloat) -> UIColor {
+        var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+        if color.getRed(&r, green: &g, blue: &b, alpha: &a) {
+            return UIColor(red: r, green: g, blue: b, alpha: alpha)
+        }
+        return color.withAlphaComponent(alpha)
     }
 
     /// Opaque white silhouette used as `UIVisualEffectView.mask` (alpha = visibility).
@@ -1255,6 +1293,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         iv.contentMode = .scaleAspectFill
         iv.backgroundColor = UIColor(white: 0.92, alpha: 1)
         iv.layer.cornerRadius = cornerRadius
+        iv.layer.cornerCurve = .continuous
         iv.clipsToBounds = true
         return iv
     }
@@ -1438,11 +1477,13 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
         frameView.backgroundColor = annotation.dopinBorderColor
         frameView.layer.cornerRadius = outerRadius
+        frameView.layer.cornerCurve = .continuous
         frameView.clipsToBounds = true
 
         let avatarSide = max(0, min(frameW, frameH) - border * 2)
         let avatarWrap = UIView(frame: CGRect(x: 0, y: 0, width: avatarSide, height: avatarSide))
         avatarWrap.layer.cornerRadius = innerRadius
+        avatarWrap.layer.cornerCurve = .continuous
         avatarWrap.clipsToBounds = true
         avatarWrap.center = CGPoint(x: frameView.bounds.midX, y: frameView.bounds.midY)
         let avatar = imageView(side: avatarSide, cornerRadius: innerRadius, tag: imageTagBase)
@@ -2279,6 +2320,7 @@ enum ClusterStackMarkerBuilder {
         let outer = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
         outer.backgroundColor = .white
         outer.layer.cornerRadius = placement.cornerRadius
+        outer.layer.cornerCurve = .continuous
         outer.clipsToBounds = false
         outer.layer.shadowColor = UIColor.black.cgColor
         outer.layer.shadowOpacity = 0.14
@@ -2293,6 +2335,7 @@ enum ClusterStackMarkerBuilder {
         imageView.contentMode = .scaleAspectFill
         imageView.backgroundColor = UIColor(white: 0.92, alpha: 1)
         imageView.layer.cornerRadius = innerRadius
+        imageView.layer.cornerCurve = .continuous
         imageView.clipsToBounds = true
         outer.addSubview(imageView)
 

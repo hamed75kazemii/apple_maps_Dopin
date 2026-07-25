@@ -31,6 +31,7 @@ class MarkerDialog {
     this.textColor = Colors.white,
     this.fontSize = 14,
     this.horizontalPadding = 10,
+    this.verticalPadding = 0,
     this.gapAboveMarker = 4,
     this.marqueeSpeed = 16,
     this.style = MarkerDialogStyle.pill,
@@ -40,6 +41,7 @@ class MarkerDialog {
         assert(height >= 0),
         assert(fontSize > 0),
         assert(horizontalPadding >= 0),
+        assert(verticalPadding >= 0),
         assert(marqueeSpeed > 0);
 
   /// Text shown inside the bubble. Empty / whitespace-only → dialog is hidden.
@@ -61,6 +63,9 @@ class MarkerDialog {
 
   /// Horizontal inset for text inside the bubble.
   final double horizontalPadding;
+
+  /// Vertical inset for text inside the bubble (cloud style). Ignored for pill.
+  final double verticalPadding;
 
   /// Vertical space between the dialog tail tip and the marker top.
   ///
@@ -92,12 +97,16 @@ class MarkerDialog {
     required String text,
     double fontSize = 12,
     double horizontalPadding = 4,
+    double verticalPadding = 6,
   }) {
     final String cleaned = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (cleaned.isEmpty) {
       return const Size(52, 36);
     }
-    const double vPad = 5;
+    // Matches iOS cloudHorizontalContentInset (user pad + ~8pt corner clearance).
+    const double shapeClearance = 8;
+    final double hPad = horizontalPadding + shapeClearance;
+    final double vPad = verticalPadding;
     final TextPainter painter = TextPainter(
       text: TextSpan(
         text: cleaned,
@@ -117,7 +126,7 @@ class MarkerDialog {
     final double visibleH = fullH < lineH * cloudMaxVisibleLines
         ? fullH
         : lineH * cloudMaxVisibleLines;
-    final double cloudW = (textW + horizontalPadding * 2).clamp(52.0, 200.0);
+    final double cloudW = (textW + hPad * 2).clamp(52.0, 200.0);
     final double lobeExtra = visibleH * 0.18 > 6 ? visibleH * 0.18 : 6;
     final double cloudH = (visibleH + vPad * 2 + lobeExtra).clamp(36.0, 140.0);
     return Size(cloudW, cloudH);
@@ -132,6 +141,7 @@ class MarkerDialog {
       'textColor': textColor.toARGB32(),
       'fontSize': fontSize,
       'horizontalPadding': horizontalPadding,
+      'verticalPadding': verticalPadding,
       'gapAboveMarker': gapAboveMarker,
       'marqueeSpeed': marqueeSpeed,
       'style': style.name,
@@ -149,6 +159,7 @@ class MarkerDialog {
         textColor == other.textColor &&
         fontSize == other.fontSize &&
         horizontalPadding == other.horizontalPadding &&
+        verticalPadding == other.verticalPadding &&
         gapAboveMarker == other.gapAboveMarker &&
         marqueeSpeed == other.marqueeSpeed &&
         style == other.style;
@@ -163,6 +174,7 @@ class MarkerDialog {
         textColor,
         fontSize,
         horizontalPadding,
+        verticalPadding,
         gapAboveMarker,
         marqueeSpeed,
         style,
@@ -187,13 +199,14 @@ class CloudDialogBox extends MarkerDialog {
     /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
     double height = 0,
 
-    /// White ~95% transparent glass tint.
-    Color backgroundColor = const Color(0x0DFFFFFF),
+    /// Liquid Glass tint (~90% opacity white). Native forces alpha to 0.90.
+    Color backgroundColor = const Color(0xE6FFFFFF),
 
     /// Text / font color inside the cloud. Defaults to black.
     Color textColor = Colors.black,
     double fontSize = 12,
     double horizontalPadding = 4,
+    double verticalPadding = 6,
 
     /// Slight overlap so the thought-dot still kisses the marker.
     double gapAboveMarker = -5,
@@ -206,6 +219,7 @@ class CloudDialogBox extends MarkerDialog {
           textColor: textColor,
           fontSize: fontSize,
           horizontalPadding: horizontalPadding,
+          verticalPadding: verticalPadding,
           gapAboveMarker: gapAboveMarker,
           marqueeSpeed: marqueeSpeed,
           style: MarkerDialogStyle.cloud,

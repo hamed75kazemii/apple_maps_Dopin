@@ -97,6 +97,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var dialogTextColor: UIColor = .white
     var dialogFontSize: CGFloat = 14
     var dialogHorizontalPadding: CGFloat = 10
+    var dialogVerticalPadding: CGFloat = 0
     var dialogGapAboveMarker: CGFloat = 4
     var dialogMarqueeSpeed: CGFloat = 16
     /// `"pill"` (default) or `"cloud"` (frosted glass thought bubble).
@@ -134,6 +135,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             "\(dialogTextColor)",
             "\(dialogFontSize)",
             "\(dialogHorizontalPadding)",
+            "\(dialogVerticalPadding)",
             "\(dialogGapAboveMarker)",
             "\(dialogMarqueeSpeed)",
             dialogStyle,
@@ -405,6 +407,9 @@ class FlutterAnnotation: NSObject, MKAnnotation {
                 if let v = Self.cg(dialog["fontSize"]) { self.dialogFontSize = v }
                 if let v = Self.cg(dialog["horizontalPadding"]) {
                     self.dialogHorizontalPadding = v
+                }
+                if let v = Self.cg(dialog["verticalPadding"]) {
+                    self.dialogVerticalPadding = v
                 }
                 if let v = Self.cg(dialog["gapAboveMarker"]) {
                     self.dialogGapAboveMarker = v

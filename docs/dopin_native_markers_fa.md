@@ -17,7 +17,7 @@ Annotation(
     height: 40,
     borderWidth: 2,
     borderColor: Colors.white,
-    borderRadius: 12,         // null = دایره
+    borderRadius: 12,         // پیش‌فرض ۱۲؛ null = دایره
     labelFontSize: 10,
     labelColor: AppConstants.primaryColor,
     labelBackgroundColor: Colors.white,
@@ -35,7 +35,7 @@ Annotation(
 | `width` / `height` | `40` | اندازه قاب بیرونی (ثابت برای همه چیدمان‌ها) |
 | `borderWidth` | `2` | ضخامت بردر |
 | `borderColor` | سفید | رنگ بردر |
-| `borderRadius` | `null` → **دایره** | گوشه قاب |
+| `borderRadius` | `12` (`null` → دایره) | گوشه قاب |
 | `labelFontSize` | `10` | اندازه فونت لیبل |
 | `badgeHeight` | `18` | ارتفاع بج |
 | `labelColor` | بنفش | رنگ متن لیبل |
@@ -112,7 +112,7 @@ Annotation(
 
 ### کلاد دیالوگ باکس (`CloudDialogBox`)
 
-حباب فکر ابری با پس‌زمینه **گلس** (بلور نقشه + تینت نیمه‌شفاف)، مطابق طرح Figma.
+حباب فکر ابری با **Liquid Glass** روی iOS 26 (`UIGlassEffect`، تینت ~۹۰٪)، و blur کلاسیک روی نسخه‌های قبل.
 
 ```dart
 Annotation(
@@ -129,10 +129,11 @@ Annotation(
 |------|---------------|--------|
 | `text` | — | عرض هر خط ≤ ۶۴px؛ حداکثر ۳ خط دیده می‌شود، بقیه اسکرول |
 | `width` / `height` | `0` = **auto** | اندازه بدنه؛ `0` یعنی متناسب با متن |
-| `backgroundColor` | `0x0DFFFFFF` | گلس سفید ~۹۵٪ شفاف + شین ۱۵٪ در −۴۵° |
+| `backgroundColor` | `0xE6FFFFFF` | تینت سفید Liquid Glass (~۹۰٪) |
 | `textColor` | مشکی (`Colors.black`) | رنگ فونت متن داخل ابر |
 | `fontSize` | `12` | اندازه فونت |
-| `horizontalPadding` | `4` | پدینگ افقی متن |
+| `horizontalPadding` | `4` | پدینگ چپ/راست متن |
+| `verticalPadding` | `6` | پدینگ بالا/پایین متن |
 | `gapAboveMarker` | `-5` | هم‌پوشانی کم دم با مارکر (دایره پایین توپر، بدون گلس) |
 
 ```dart

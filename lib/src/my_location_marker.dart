@@ -66,6 +66,7 @@ class MyLocationMarker {
               text: dialog.text,
               fontSize: dialog.fontSize,
               horizontalPadding: dialog.horizontalPadding,
+              verticalPadding: dialog.verticalPadding,
             );
       final double sx = body.width / _cloudDesignWidth;
       final double sy = body.height / _cloudDesignHeight;

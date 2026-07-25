@@ -10,7 +10,7 @@ part of apple_maps_flutter;
 /// [imageUrls] accepts up to 4 URLs; layout adapts to count (1–4).
 /// [width] / [height] define the outer frame: 1 and 3–4 images use the full size;
 /// 2 images use full [width] and half [height]. Images shrink inside the fixed frame.
-/// If [borderRadius] is omitted, the marker is drawn as a circle.
+/// Default [borderRadius] is `12`. Pass `null` for a full circle.
 @immutable
 class DopinMarker {
   const DopinMarker({
@@ -23,7 +23,7 @@ class DopinMarker {
     this.height = 40,
     this.borderWidth = 2,
     this.borderColor = Colors.white,
-    this.borderRadius,
+    this.borderRadius = 12,
     this.labelFontSize = 10,
     this.badgeHeight = 18,
     this.labelColor = const Color(0xFF7B2CBF),
@@ -40,7 +40,7 @@ class DopinMarker {
     double height = 40,
     double borderWidth = 2,
     Color borderColor = Colors.white,
-    double? borderRadius,
+    double? borderRadius = 12,
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
@@ -78,7 +78,7 @@ class DopinMarker {
     double height = 40,
     double borderWidth = 2,
     Color borderColor = Colors.white,
-    double? borderRadius,
+    double? borderRadius = 12,
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
@@ -133,7 +133,7 @@ class DopinMarker {
   final double borderWidth;
   final Color borderColor;
 
-  /// Outer corner radius. `null` → circle (half of min [width], [height]).
+  /// Outer corner radius. Defaults to `12`. `null` → circle (half of min [width], [height]).
   final double? borderRadius;
 
   final double labelFontSize;
