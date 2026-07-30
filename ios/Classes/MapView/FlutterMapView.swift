@@ -36,6 +36,10 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     /// Called when location tracking stops (custom marker mode).
     var onUserLocationClear: (() -> Void)?
 
+    /// Fired when the map leaves a window (e.g. Flutter page pop) so the
+    /// owning controller can tear down display links and the channel handler.
+    var onRemovedFromWindow: (() -> Void)?
+
     var lastUserCoordinate: CLLocationCoordinate2D?
     
     fileprivate let locationManager: CLLocationManager = CLLocationManager()
@@ -168,7 +172,14 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             oldBounds = CGRect.zero
         }
     }
-    
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            onRemovedFromWindow?()
+        }
+    }
+
     private func findViewOfType(_ viewType: String, inView view: UIView) -> UIView? {
       // function scans subviews recursively and returns
       // reference to the found one of a type

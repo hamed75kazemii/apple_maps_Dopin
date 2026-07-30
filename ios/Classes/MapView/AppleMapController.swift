@@ -17,6 +17,8 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     var initialCameraPosition: [String: Any]
     var options: [String: Any]
     var currentlySelectedAnnotation: String?
+    /// O(1) lookup for Flutter annotations by id (avoids O(N²) update scans).
+    var annotationsById: [String: FlutterAnnotation] = [:]
     var snapShotOptions: MKMapSnapshotter.Options = MKMapSnapshotter.Options()
     var snapShot: MKMapSnapshotter?
 
@@ -81,11 +83,33 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         let heading: CLLocationDirection
     }
 
+    /// True after [dispose] so late channel calls and display-link ticks no-op.
+    private var isDisposed = false
+
+    /// Keeps CADisplayLink targets alive without retaining this controller.
+    private var orbitDisplayLinkTarget: DisplayLinkTarget?
+    private var cameraAnimationDisplayLinkTarget: DisplayLinkTarget?
+
     deinit {
-        orbitDisplayLink?.invalidate()
-        orbitDisplayLink = nil
-        cameraAnimationDisplayLink?.invalidate()
-        cameraAnimationDisplayLink = nil
+        disposeNativeResources()
+    }
+
+    /// Stops display links, clears the method channel handler, and marks the
+    /// controller disposed. Idempotent — safe from Dart `map#dispose`, view
+    /// teardown, and `deinit`.
+    func dispose() {
+        guard !isDisposed else { return }
+        isDisposed = true
+        disposeNativeResources()
+        channel.setMethodCallHandler(nil)
+        mapView.onRemovedFromWindow = nil
+        mapView.delegate = nil
+        annotationsById.removeAll()
+    }
+
+    private func disposeNativeResources() {
+        invalidateOrbitDisplayLink()
+        invalidateCameraAnimation()
     }
 
     public init(withFrame frame: CGRect, withRegistrar registrar: FlutterPluginRegistrar, withargs args: Dictionary<String, Any> ,withId id: Int64) {
@@ -117,6 +141,9 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         }
         self.mapView.onUserLocationClear = { [weak self] in
             self?.removeUserLocationMarker()
+        }
+        self.mapView.onRemovedFromWindow = { [weak self] in
+            self?.dispose()
         }
 
         self.mapView.setCenterCoordinate(initialCameraPosition, animated: false)
@@ -180,7 +207,11 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     }
 
     private func setMethodCallHandlers() {
-        channel.setMethodCallHandler({ [unowned self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+        channel.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+            guard let self = self, !self.isDisposed else {
+                result(FlutterError(code: "disposed", message: "Map was disposed", details: nil))
+                return
+            }
             if let args: Dictionary<String, Any> = call.arguments as? Dictionary<String,Any> {
                 switch(call.method) {
                 case "annotations#update":
@@ -189,9 +220,11 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     break
                 case "annotations#showInfoWindow":
                     self.selectAnnotation(with: args["annotationId"] as! String)
+                    result(nil)
                     break
                 case "annotations#hideInfoWindow":
                     self.hideAnnotation(with: args["annotationId"] as! String)
+                    result(nil)
                     break
                 case "annotations#isInfoWindowShown":
                     result(self.isAnnotationSelected(with: args["annotationId"] as! String))
@@ -216,6 +249,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                         self.reconfigureClusteringForAllAnnotations()
                     }
                     self.applyMyLocationMarker(from: options)
+                    result(nil)
                     break
                 case "camera#animate":
                     self.animateCamera(args: args)
@@ -256,6 +290,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                 }
             } else {
                 switch call.method {
+                case "map#dispose":
+                    self.dispose()
+                    result(nil)
+                    break
                 case "map#getVisibleRegion":
                     result(self.mapView.getVisibleRegion())
                     break
@@ -580,14 +618,24 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.cameraAnimationStartTime = 0
 
         self.applyCameraTransitionFrame(progress: 0)
-        self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
+        if !self.isDisposed {
+            self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
+        }
 
-        let link = CADisplayLink(target: self, selector: #selector(self.onCameraAnimationTick(_:)))
+        let target = DisplayLinkTarget { [weak self] link in
+            self?.onCameraAnimationTick(link)
+        }
+        self.cameraAnimationDisplayLinkTarget = target
+        let link = CADisplayLink(target: target, selector: #selector(DisplayLinkTarget.tick(_:)))
         link.add(to: .main, forMode: .common)
         self.cameraAnimationDisplayLink = link
     }
 
-    @objc private func onCameraAnimationTick(_ link: CADisplayLink) -> Void {
+    private func onCameraAnimationTick(_ link: CADisplayLink) -> Void {
+        guard !isDisposed else {
+            invalidateCameraAnimation()
+            return
+        }
         if self.cameraAnimationStartTime == 0 {
             self.cameraAnimationStartTime = link.timestamp
             return
@@ -630,6 +678,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.applyCameraTransitionFrame(progress: 1)
         self.invalidateCameraAnimation()
 
+        guard !isDisposed else { return }
         let center = self.logicalCameraCenter()
         self.channel.invokeMethod("camera#onMove", arguments: ["position": [
             "heading": self.mapView.actualHeading,
@@ -643,6 +692,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     private func invalidateCameraAnimation() -> Void {
         self.cameraAnimationDisplayLink?.invalidate()
         self.cameraAnimationDisplayLink = nil
+        self.cameraAnimationDisplayLinkTarget = nil
         self.cameraAnimationStartTime = 0
     }
 
@@ -703,7 +753,11 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         )
 
         self.orbitLastTimestamp = 0
-        let link = CADisplayLink(target: self, selector: #selector(self.onOrbitTick(_:)))
+        let target = DisplayLinkTarget { [weak self] link in
+            self?.onOrbitTick(link)
+        }
+        self.orbitDisplayLinkTarget = target
+        let link = CADisplayLink(target: target, selector: #selector(DisplayLinkTarget.tick(_:)))
         link.add(to: .main, forMode: .common)
         self.orbitDisplayLink = link
     }
@@ -742,7 +796,11 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         return CGFloat(value)
     }
 
-    @objc private func onOrbitTick(_ link: CADisplayLink) -> Void {
+    private func onOrbitTick(_ link: CADisplayLink) -> Void {
+        guard !isDisposed else {
+            invalidateOrbitDisplayLink()
+            return
+        }
         // Seed the timestamp on the first tick so the very first delta is ~0.
         if self.orbitLastTimestamp == 0 {
             self.orbitLastTimestamp = link.timestamp
@@ -768,6 +826,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     private func invalidateOrbitDisplayLink() -> Void {
         self.orbitDisplayLink?.invalidate()
         self.orbitDisplayLink = nil
+        self.orbitDisplayLinkTarget = nil
         self.orbitLastTimestamp = 0
         self.orbitElapsed = 0
     }
@@ -775,7 +834,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     private func stopOrbit() -> Void {
         let wasOrbiting = self.isOrbiting
         self.invalidateOrbitDisplayLink()
-        guard wasOrbiting else { return }
+        guard wasOrbiting, !isDisposed else { return }
 
         // Push the final camera state back to Flutter so the Dart side's cached
         // camera position stays in sync after the native sweep ends.
@@ -845,6 +904,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
 extension AppleMapController: MKMapViewDelegate {
     // onIdle
     public func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        guard !isDisposed else { return }
         self.mapView.isMapRegionChanging = false
         if !self.mapView.hasCompletedInitialMapLoad {
             self.mapView.hasCompletedInitialMapLoad = true
@@ -868,6 +928,7 @@ extension AppleMapController: MKMapViewDelegate {
 
     // onMoveStarted
     public func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+        guard !isDisposed else { return }
         if self.isDrivingCamera { return }
         self.mapView.isMapRegionChanging = true
         self.channel.invokeMethod("camera#onMoveStarted", arguments: "")
@@ -1022,5 +1083,20 @@ extension AppleMapController {
             flutterOverlay.getCAShapeLayer(snapshot: snapshot).render(in: context.cgContext)
         }
 
+    }
+}
+
+/// CADisplayLink retains its target strongly. This proxy holds only a weak
+/// callback so AppleMapController can deallocate while a link is still scheduled;
+/// the tick then invalidates via the disposed guards / deinit path.
+private final class DisplayLinkTarget: NSObject {
+    private let onTick: (CADisplayLink) -> Void
+
+    init(onTick: @escaping (CADisplayLink) -> Void) {
+        self.onTick = onTick
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        onTick(link)
     }
 }

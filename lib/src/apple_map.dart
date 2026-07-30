@@ -290,6 +290,15 @@ class _AppleMapState extends State<AppleMap> {
   }
 
   @override
+  void dispose() {
+    if (_controller.isCompleted) {
+      // ignore: unawaited_futures
+      _controller.future.then((AppleMapController c) => c._dispose());
+    }
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(AppleMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     _updateOptions();
@@ -307,37 +316,100 @@ class _AppleMapState extends State<AppleMap> {
       return;
     }
     final AppleMapController controller = await _controller.future;
-    controller._updateMapOptions(updates);
+    if (!mounted) {
+      return;
+    }
+    try {
+      await controller._updateMapOptions(updates);
+    } on PlatformException catch (e) {
+      if (e.code == 'disposed') {
+        return;
+      }
+      rethrow;
+    }
+    if (!mounted) {
+      return;
+    }
     _appleMapOptions = newOptions;
   }
 
   void _updateAnnotations() async {
     final AppleMapController controller = await _controller.future;
-    controller._updateAnnotations(_AnnotationUpdates.from(
-        _annotations.values.toSet(), widget.annotations));
+    if (!mounted) {
+      return;
+    }
+    try {
+      await controller._updateAnnotations(_AnnotationUpdates.from(
+          _annotations.values.toSet(), widget.annotations));
+    } on PlatformException catch (e) {
+      if (e.code == 'disposed') {
+        return;
+      }
+      rethrow;
+    }
+    if (!mounted) {
+      return;
+    }
     _annotations = _keyByAnnotationId(widget.annotations);
   }
 
   void _updatePolylines() async {
     final AppleMapController controller = await _controller.future;
-    controller._updatePolylines(
-        _PolylineUpdates.from(_polylines.values.toSet(), widget.polylines));
+    if (!mounted) {
+      return;
+    }
+    try {
+      await controller._updatePolylines(
+          _PolylineUpdates.from(_polylines.values.toSet(), widget.polylines));
+    } on PlatformException catch (e) {
+      if (e.code == 'disposed') {
+        return;
+      }
+      rethrow;
+    }
+    if (!mounted) {
+      return;
+    }
     _polylines = _keyByPolylineId(widget.polylines);
   }
 
   void _updatePolygons() async {
     final AppleMapController controller = await _controller.future;
-    // ignore: unawaited_futures
-    controller._updatePolygons(
-        _PolygonUpdates.from(_polygons.values.toSet(), widget.polygons));
+    if (!mounted) {
+      return;
+    }
+    try {
+      await controller._updatePolygons(
+          _PolygonUpdates.from(_polygons.values.toSet(), widget.polygons));
+    } on PlatformException catch (e) {
+      if (e.code == 'disposed') {
+        return;
+      }
+      rethrow;
+    }
+    if (!mounted) {
+      return;
+    }
     _polygons = _keyByPolygonId(widget.polygons);
   }
 
   void _updateCircles() async {
     final AppleMapController controller = await _controller.future;
-    // ignore: unawaited_futures
-    controller._updateCircles(
-        _CircleUpdates.from(_circles.values.toSet(), widget.circles));
+    if (!mounted) {
+      return;
+    }
+    try {
+      await controller._updateCircles(
+          _CircleUpdates.from(_circles.values.toSet(), widget.circles));
+    } on PlatformException catch (e) {
+      if (e.code == 'disposed') {
+        return;
+      }
+      rethrow;
+    }
+    if (!mounted) {
+      return;
+    }
     _circles = _keyByCircleId(widget.circles);
   }
 

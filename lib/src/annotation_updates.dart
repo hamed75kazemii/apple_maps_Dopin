@@ -43,6 +43,7 @@ class _AnnotationUpdates {
     final Set<Annotation> _annotationsToChange = currentAnnotationIds
         .intersection(prevAnnotationIds)
         .map(idToCurrentAnnotation)
+        .where((Annotation a) => previousAnnotations[a.annotationId] != a)
         .toSet();
 
     annotationsToAdd = _annotationsToAdd;

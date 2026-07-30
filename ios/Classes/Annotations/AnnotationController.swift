@@ -243,7 +243,7 @@ extension AppleMapController: AnnotationDelegate {
             flutterView.applyFlutterMarkerShadow()
         }
         // If annotation is not visible set alpha to 0 and don't let the user interact with it
-        if !annotation.isVisible! {
+        if !(annotation.isVisible ?? true) {
             annotation.pendingScaleInAnimation = false
             if annotation.pendingScaleOutAnimation {
                 // Keep the view visible so the exit animation can play.
@@ -252,13 +252,13 @@ extension AppleMapController: AnnotationDelegate {
                 annotationView!.isDraggable = false
                 self.configureClustering(for: annotationView!, annotation: annotation)
                 annotationView!.playScaleOutOnHideIfNeeded(for: annotation)
-                return annotationView! as! FlutterAnnotationView
+                return annotationView!
             }
             annotationView!.canShowCallout = false
             annotationView!.alpha = CGFloat(0.0)
             annotationView!.isDraggable = false
             self.configureClustering(for: annotationView!, annotation: annotation)
-            return annotationView! as! FlutterAnnotationView
+            return annotationView!
         }
         if annotation.icon.iconType != .MARKER {
             self.initInfoWindow(annotation: annotation, annotationView: annotationView!)
@@ -345,17 +345,18 @@ extension AppleMapController: AnnotationDelegate {
     }
 
     func annotationsToChange(annotations: NSArray) {
-        let oldAnnotations: [MKAnnotation] = self.mapView.annotations
         for annotation in annotations {
-            let annotationData: Dictionary<String, Any> = annotation as! Dictionary<String, Any>
-            if let annotationToChange = oldAnnotations.filter({($0 as? FlutterAnnotation)?.id == annotationData["annotationId"] as? String})[0] as? FlutterAnnotation {
-                let newAnnotation = FlutterAnnotation.init(fromDictionary: annotationData, registrar: registrar)
-                if annotationToChange != newAnnotation {
-                    if !annotationToChange.wasDragged {
-                        updateAnnotation(annotation: newAnnotation)
-                    } else {
-                        annotationToChange.wasDragged = false
-                    }
+            guard let annotationData = annotation as? Dictionary<String, Any>,
+                  let annotationId = annotationData["annotationId"] as? String,
+                  let annotationToChange = annotationsById[annotationId] else {
+                continue
+            }
+            let newAnnotation = FlutterAnnotation.init(fromDictionary: annotationData, registrar: registrar)
+            if annotationToChange != newAnnotation {
+                if !annotationToChange.wasDragged {
+                    updateAnnotation(annotation: newAnnotation)
+                } else {
+                    annotationToChange.wasDragged = false
                 }
             }
         }
@@ -371,6 +372,7 @@ extension AppleMapController: AnnotationDelegate {
 
     func removeAllAnnotations() {
         self.mapView.removeAnnotations(self.mapView.annotations)
+        annotationsById.removeAll()
     }
 
     func onAnnotationClick(annotation: MKAnnotation) {
@@ -400,6 +402,7 @@ extension AppleMapController: AnnotationDelegate {
     private func removeAnnotation(id: String) {
         if let flutterAnnotation: FlutterAnnotation = self.getAnnotation(with: id) {
             self.mapView.removeAnnotation(flutterAnnotation)
+            annotationsById.removeValue(forKey: id)
         }
     }
 
@@ -434,7 +437,17 @@ extension AppleMapController: AnnotationDelegate {
     }
 
     private func getAnnotation(with id: String) -> FlutterAnnotation? {
-        return self.mapView.annotations.filter { annotation in return (annotation as? FlutterAnnotation)?.id == id }.first as? FlutterAnnotation
+        if let cached = annotationsById[id] {
+            return cached
+        }
+        // Fallback for annotations added outside the indexed path.
+        let found = self.mapView.annotations.first { annotation in
+            return (annotation as? FlutterAnnotation)?.id == id
+        } as? FlutterAnnotation
+        if let found = found, let foundId = found.id {
+            annotationsById[foundId] = found
+        }
+        return found
     }
 
     private func annotationExists(with id: String) -> Bool {
@@ -460,6 +473,9 @@ extension AppleMapController: AnnotationDelegate {
         }
         if annotation.scaleInOnAdd {
             annotation.pendingScaleInAnimation = true
+        }
+        if let id = annotation.id {
+            annotationsById[id] = annotation
         }
         self.mapView.addAnnotation(annotation)
     }

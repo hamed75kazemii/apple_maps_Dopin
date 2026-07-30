@@ -34,7 +34,26 @@ class AppleMapController {
 
   final _AppleMapState _appleMapState;
 
+  bool _disposed = false;
+
+  void _dispose() {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    channel.setMethodCallHandler(null);
+    // Best-effort native teardown; ignore failures if the view is already gone.
+    // ignore: unawaited_futures
+    channel.invokeMethod<void>('map#dispose').then<void>(
+      (_) {},
+      onError: (_) {},
+    );
+  }
+
   Future<dynamic> _handleMethodCall(MethodCall call) async {
+    if (_disposed) {
+      return;
+    }
     switch (call.method) {
       case 'camera#onMoveStarted':
         _appleMapState.widget.onCameraMoveStarted?.call();
@@ -103,6 +122,9 @@ class AppleMapController {
   ///
   /// The returned [Future] completes after listeners have been notified.
   Future<void> _updateMapOptions(Map<String, dynamic> optionsUpdate) async {
+    if (_disposed) {
+      return;
+    }
     await channel.invokeMethod<void>(
       'map#update',
       <String, dynamic>{
@@ -118,6 +140,14 @@ class AppleMapController {
   ///
   /// The returned [Future] completes after listeners have been notified.
   Future<void> _updateAnnotations(_AnnotationUpdates annotationUpdates) async {
+    if (_disposed) {
+      return;
+    }
+    if (annotationUpdates.annotationsToAdd.isEmpty &&
+        annotationUpdates.annotationsToChange.isEmpty &&
+        annotationUpdates.annotationIdsToRemove.isEmpty) {
+      return;
+    }
     await channel.invokeMethod<void>(
       'annotations#update',
       annotationUpdates._toMap(),
@@ -131,6 +161,14 @@ class AppleMapController {
   ///
   /// The returned [Future] completes after listeners have been notified.
   Future<void> _updatePolylines(_PolylineUpdates polylineUpdates) async {
+    if (_disposed) {
+      return;
+    }
+    if (polylineUpdates.polylinesToAdd.isEmpty &&
+        polylineUpdates.polylinesToChange.isEmpty &&
+        polylineUpdates.polylineIdsToRemove.isEmpty) {
+      return;
+    }
     await channel.invokeMethod<void>(
       'polylines#update',
       polylineUpdates._toMap(),
@@ -144,6 +182,14 @@ class AppleMapController {
   ///
   /// The returned [Future] completes after listeners have been notified.
   Future<void> _updatePolygons(_PolygonUpdates polygonUpdates) async {
+    if (_disposed) {
+      return;
+    }
+    if (polygonUpdates.polygonsToAdd.isEmpty &&
+        polygonUpdates.polygonsToChange.isEmpty &&
+        polygonUpdates.polygonIdsToRemove.isEmpty) {
+      return;
+    }
     await channel.invokeMethod<void>(
       'polygons#update',
       polygonUpdates._toMap(),
@@ -157,6 +203,14 @@ class AppleMapController {
   ///
   /// The returned [Future] completes after listeners have been notified.
   Future<void> _updateCircles(_CircleUpdates circleUpdates) async {
+    if (_disposed) {
+      return;
+    }
+    if (circleUpdates.circlesToAdd.isEmpty &&
+        circleUpdates.circlesToChange.isEmpty &&
+        circleUpdates.circleIdsToRemove.isEmpty) {
+      return;
+    }
     await channel.invokeMethod<void>(
       'circles#update',
       circleUpdates._toMap(),
