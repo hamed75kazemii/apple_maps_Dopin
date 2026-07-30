@@ -556,7 +556,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.scaleInOnAdd = annotation.scaleInOnAdd
                 oldAnnotation.scaleOutOnHide = annotation.scaleOutOnHide
             })
-            
+
             if let view = self.mapView.view(for: oldAnnotation) {
                 if shouldAnimateHide {
                     // Keep the existing view and play the exit animation on it.

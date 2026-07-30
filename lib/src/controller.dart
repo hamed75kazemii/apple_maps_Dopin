@@ -432,6 +432,14 @@ class AppleMapController {
     return setTrackingMode(TrackingMode.none);
   }
 
+  /// Deselects any selected annotations, including native MapKit POI features.
+  ///
+  /// Use when leaving a POI picker so the selected callout does not stick on a
+  /// shared map after [AppleMap.showPointsOfInterest] is turned off.
+  Future<void> clearSelection() {
+    return channel.invokeMethod<void>('map#clearSelection');
+  }
+
   /// Returns the image bytes of the map
   Future<Uint8List?> takeSnapshot(
       [SnapshotOptions snapshotOptions = const SnapshotOptions()]) {

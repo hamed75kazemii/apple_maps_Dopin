@@ -112,6 +112,13 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             self.selectableMapFeatures = enabled ? [.pointsOfInterest] : []
         }
     }
+
+    /// Clears MapKit selection (Flutter markers and native POI feature callouts).
+    func clearSelection(animated: Bool = false) {
+        for annotation in self.selectedAnnotations {
+            self.deselectAnnotation(annotation, animated: animated)
+        }
+    }
     
     var actualHeading: CLLocationDirection {
         get {
@@ -318,10 +325,78 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             return
         }
         if #available(iOS 13.0, *) {
-            self.pointOfInterestFilter = showsPointsOfInterest
-                ? MKPointOfInterestFilter.includingAll
-                : MKPointOfInterestFilter.excludingAll
+            self.pointOfInterestFilter = Self.dopinPointOfInterestFilter(
+                showing: showsPointsOfInterest
+            )
         }
+    }
+
+    /// Dopin-curated POI filter: include allowlisted categories, or hide all.
+    @available(iOS 13.0, *)
+    private static func dopinPointOfInterestFilter(showing: Bool) -> MKPointOfInterestFilter {
+        showing
+            ? MKPointOfInterestFilter(including: dopinPointOfInterestCategories())
+            : MKPointOfInterestFilter.excludingAll
+    }
+
+    /// MapKit categories shown when POIs are enabled (Eat & Drink, Get Active,
+    /// Party & Watch, Explore & Talk). Categories introduced in iOS 18 are
+    /// appended only when available (sports plus newer landmarks / venues).
+    @available(iOS 13.0, *)
+    private static func dopinPointOfInterestCategories() -> [MKPointOfInterestCategory] {
+        var categories: [MKPointOfInterestCategory] = [
+            // Eat & Drink
+            .restaurant,
+            .cafe,
+            .bakery,
+            .brewery,
+            .winery,
+            .foodMarket,
+            // Get Active (baseline; sports-specific appended on iOS 18+)
+            .park,
+            .beach,
+            .fitnessCenter,
+            // Party & Watch
+            .nightlife,
+            .movieTheater,
+            .theater,
+            .stadium,
+            .amusementPark,
+            // Explore & Talk
+            .museum,
+            .aquarium,
+            .zoo,
+            .library,
+            .university,
+        ]
+        if #available(iOS 18.0, *) {
+            categories.append(contentsOf: [
+                // Eat & Drink / Party & Watch / Explore (iOS 18+)
+                .distillery,
+                .musicVenue,
+                .fairground,
+                .landmark,
+                .nationalMonument,
+                .castle,
+                .planetarium,
+                .conventionCenter,
+                // Get Active — sports-specific
+                .hiking,
+                .swimming,
+                .tennis,
+                .basketball,
+                .soccer,
+                .volleyball,
+                .skatePark,
+                .skating,
+                .rockClimbing,
+                .golf,
+                .miniGolf,
+                .bowling,
+                .goKart,
+            ])
+        }
+        return categories
     }
 
     func setUserLocation() {
@@ -507,9 +582,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
             let elevation = mapKitElevationStyle()
             let poiFilter: MKPointOfInterestFilter? = {
                 if #available(iOS 13.0, *) {
-                    return showsPointsOfInterest
-                        ? MKPointOfInterestFilter.includingAll
-                        : MKPointOfInterestFilter.excludingAll
+                    return Self.dopinPointOfInterestFilter(showing: showsPointsOfInterest)
                 }
                 return nil
             }()

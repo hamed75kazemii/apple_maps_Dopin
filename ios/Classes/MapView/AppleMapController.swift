@@ -295,6 +295,10 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     self.mapView.goToUserLocation()
                     result(nil)
                     break
+                case "map#clearSelection":
+                    self.mapView.clearSelection(animated: false)
+                    result(nil)
+                    break
                 default:
                     result(FlutterMethodNotImplemented)
                     break

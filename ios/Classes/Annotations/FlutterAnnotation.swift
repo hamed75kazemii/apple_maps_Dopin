@@ -187,19 +187,19 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         if let zIndex = annotationData["zIndex"] as? Double {
             self.zIndex = zIndex
         }
-        
+
         if let alpha: Double = annotationData["alpha"] as? Double {
             self.alpha = alpha
         }
-        
+
         if let anchorJSON: Array<Double> = annotationData["anchor"] as? Array<Double> {
             self.anchor = Offset(from: anchorJSON)
         }
-        
+
         if let iconData: Array<Any> = annotationData["icon"] as? Array<Any> {
             self.icon = FlutterAnnotation.getAnnotationIcon(iconData: iconData, registrar: registrar, annotationId: id)
         }
-        
+
         if let calloutOffsetJSON = infoWindow["anchor"] as? Array<Double> {
             self.calloutOffset = Offset(from: calloutOffsetJSON)
         }
@@ -474,14 +474,14 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         let b = CGFloat(value & 0xFF) / 255.0
         return UIColor(red: r, green: g, blue: b, alpha: a > 0 ? a : 1)
     }
-    
-    
+
+
     static private func getAnnotationIcon(iconData: Array<Any>, registrar: FlutterPluginRegistrar, annotationId: String) -> AnnotationIcon {
         let iconTypeMap: Dictionary<String, IconType> = ["fromAssetImage": .CUSTOM_FROM_ASSET, "fromBytes": .CUSTOM_FROM_BYTES, "defaultAnnotation": .PIN, "markerAnnotation": .MARKER]
         let iconType: IconType = iconTypeMap[iconData[0] as! String] ?? .PIN
         var icon: AnnotationIcon =  AnnotationIcon(id: annotationId, iconType: iconType)
         var scaleParam: CGFloat?
-        
+
         if iconType == .CUSTOM_FROM_ASSET {
             let assetPath: String = iconData[1] as! String
             scaleParam = CGFloat(iconData[2] as? Double ?? 1.0)
@@ -490,15 +490,15 @@ class FlutterAnnotation: NSObject, MKAnnotation {
             icon = AnnotationIcon(fromBytes: iconData[1] as! FlutterStandardTypedData, id: annotationId)
         } else if iconData.count > 1 {
             icon = AnnotationIcon(id: annotationId, iconType: iconType, hueColor: iconData[1] as! Double)
-            
+
         }
         return icon
     }
-    
+
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
         return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelBackgroundColor == rhs.dopinLabelBackgroundColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.dopinLabelBackgroundGradientColors == rhs.dopinLabelBackgroundGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature && lhs.markerDialogSignature == rhs.markerDialogSignature
     }
-    
+
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
         return !(lhs == rhs)
     }
@@ -507,12 +507,12 @@ class FlutterAnnotation: NSObject, MKAnnotation {
 struct Offset {
     let x: Double
     let y: Double
-    
+
     public init(from json: Array<Double>) {
         self.x = json[0]
         self.y = json[1]
     }
-    
+
     public init() {
         self.x = 0
         self.y = 0
@@ -522,11 +522,11 @@ struct Offset {
         self.x = x
         self.y = y
     }
-    
+
     static func == (lhs: Offset, rhs: Offset) -> Bool {
         return lhs.x == rhs.x && lhs.y == rhs.y
     }
-    
+
     static func != (lhs: Offset, rhs: Offset) -> Bool {
         return !(lhs == rhs)
     }

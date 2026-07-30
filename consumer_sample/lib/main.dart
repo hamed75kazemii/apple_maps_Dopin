@@ -65,7 +65,7 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
     if (!mounted) return;
     setState(() {
       _annotations = <Annotation>{
-        _dialogDemoMarker(),
+        //   _dialogDemoMarker(),
         _cloudDialogDemoMarker(),
       };
     });
@@ -186,17 +186,17 @@ class _MapSmokeTestScreenState extends State<MapSmokeTestScreen> {
             mapType: MapType.mutedStandard,
             elevationStyle: ElevationStyle.realistic,
             clusteringEnabled: true,
-            showPointsOfInterest: false,
+            //    showPointsOfInterest: false,
             globeAtMinZoom: true,
             minMaxZoomPreference: const MinMaxZoomPreference(0, 21),
             onMapCreated: _onMapCreated,
             annotations: _annotations,
             onTrackingModeChanged: _onTrackingModeChanged,
-            myLocationMarker: const MyLocationMarker(
-              label: 'Me',
-              imageUrl: 'https://i.pravatar.cc/150?img=12',
-              dialog: CloudDialogBox(text: "I'm ", textColor: Colors.red),
-            ),
+            // myLocationMarker: const MyLocationMarker(
+            //   label: 'Me',
+            //   imageUrl: 'https://i.pravatar.cc/150?img=12',
+            //   dialog: CloudDialogBox(text: "I'm ", textColor: Colors.red),
+            // ),
             myLocationButtonEnabled: false,
           ),
           Positioned(
