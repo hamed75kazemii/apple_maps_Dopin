@@ -36,6 +36,8 @@ Annotation(
 | `borderWidth` | `2` | ضخامت بردر |
 | `borderColor` | سفید | رنگ بردر |
 | `borderRadius` | `12` (`null` → دایره) | گوشه قاب |
+| `liquidGlassBorder` | `false` | بردر Liquid Glass (iOS 26+؛ بلور روی نسخه‌های قبل). با `emoji` → دیسک پر از گلس |
+| `emoji` | `null` | ایموجی وسط مارکر (بدون تصویر) |
 | `labelFontSize` | `10` | اندازه فونت لیبل |
 | `badgeHeight` | `18` | ارتفاع بج |
 | `labelColor` | بنفش | رنگ متن لیبل |

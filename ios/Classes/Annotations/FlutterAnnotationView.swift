@@ -569,11 +569,18 @@ enum MarkerDialogBubbleBuilder {
     /// Design reference size for the cloud body path (Figma Union 68×49).
     private static let cloudDesignWidth: CGFloat = 68
     private static let cloudDesignHeight: CGFloat = 49
-    /// Detached thought-dot diameter in design coords.
-    private static let cloudDotDesignSize: CGFloat = 10
-    private static let cloudDotGapDesign: CGFloat = 1
-    /// Max text column width (points) inside the cloud.
-    private static let cloudMaxTextWidth: CGFloat = 64
+    /// Design body ends at y=43 of 49 — the rest is the bottom lobe.
+    private static let cloudBodyDesignHeight: CGFloat = 43
+    /// Body width / one-line height, shared with the note composer bubble.
+    private static let cloudWidth: CGFloat = 80
+    private static let cloudMinHeight: CGFloat = 56
+    /// Detached thought-dot diameter and its gap below the body.
+    private static let cloudDotSize: CGFloat = 10
+    private static let cloudDotGap: CGFloat = 2
+    /// Line height multiple used by every cloud bubble.
+    private static let cloudLineHeightFactor: CGFloat = 1.2
+    /// Glass tint opacity of the cloud body and thought-dot.
+    private static let cloudTintAlpha: CGFloat = 0.80
     /// Visible lines before the text area becomes scrollable.
     private static let cloudMaxVisibleLines = 3
 
@@ -683,20 +690,20 @@ enum MarkerDialogBubbleBuilder {
     }
 
     /// Frosted-glass cloud thought bubble (Figma Group 809 / Union path).
-    /// Text wraps at 64pt; up to 3 lines visible, then vertical scroll.
+    /// Same metrics as the note composer bubble: fixed body width, height grown
+    /// from the wrapped text, up to 3 lines visible, then vertical scroll.
     private static func buildCloudBubble(annotation: FlutterAnnotation) -> UIView {
         let text = clampCloudDialogText(annotation.dialogText)
         let font = roundedFont(size: annotation.dialogFontSize)
-        // User padding + clearance for the cloud's ~16pt corner radius so glyphs
-        // don't sit on the curved edge (bounds inset alone looks "stuck").
-        let hPad = cloudHorizontalContentInset(userPadding: annotation.dialogHorizontalPadding)
+        let hPad = max(0, annotation.dialogHorizontalPadding)
         let vPad = max(0, annotation.dialogVerticalPadding)
+        let lineHeight = annotation.dialogFontSize * cloudLineHeightFactor
 
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineBreakMode = .byWordWrapping
-        paragraph.lineSpacing = 1
-        paragraph.paragraphSpacing = 0
+        paragraph.minimumLineHeight = lineHeight
+        paragraph.maximumLineHeight = lineHeight
 
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -708,6 +715,7 @@ enum MarkerDialogBubbleBuilder {
         let measured = measureCloudText(
             attributed: attributed,
             font: font,
+            lineHeight: lineHeight,
             explicitWidth: annotation.dialogWidth,
             explicitHeight: annotation.dialogHeight,
             hPad: hPad,
@@ -720,12 +728,7 @@ enum MarkerDialogBubbleBuilder {
         let fullTextHeight = measured.fullTextHeight
         let needsScroll = fullTextHeight > visibleTextHeight + 0.5
 
-        let sx = width / cloudDesignWidth
-        let sy = height / cloudDesignHeight
-        let scale = min(sx, sy)
-        let dotSize = cloudDotDesignSize * scale
-        let dotGap = cloudDotGapDesign * scale
-        let totalHeight = height + dotGap + dotSize
+        let totalHeight = height + cloudDotGap + cloudDotSize
 
         let container: UIView
         if needsScroll {
@@ -742,7 +745,7 @@ enum MarkerDialogBubbleBuilder {
         container.clipsToBounds = false
 
         let cloudPath = cloudBodyPath(width: width, height: height)
-        // Liquid Glass (iOS 26+) / frosted blur fallback; tint forced to ~90%.
+        // Liquid Glass (iOS 26+) / frosted blur fallback; tint forced to ~80%.
         let tint = annotation.dialogBackgroundColor
         let cloudGlass = makeGlassView(
             path: cloudPath,
@@ -751,13 +754,13 @@ enum MarkerDialogBubbleBuilder {
         )
         container.addSubview(cloudGlass)
 
-        let lobeReserve = height * (6.0 / cloudDesignHeight)
+        let lobeReserve = height * (1 - cloudBodyDesignHeight / cloudDesignHeight)
         // Always keep top/bottom inset; center only within the remaining band.
         let textBand = max(visibleTextHeight, height - lobeReserve - vPad * 2)
         let textTop = vPad + max(0, (textBand - visibleTextHeight) / 2)
         // Center the text column so leftover space from min cloud width is even.
         let textFrame = CGRect(
-            x: max(hPad, (width - textWidth) / 2),
+            x: (width - textWidth) / 2,
             y: textTop,
             width: textWidth,
             height: visibleTextHeight
@@ -786,21 +789,23 @@ enum MarkerDialogBubbleBuilder {
         label.preferredMaxLayoutWidth = textWidth
         scrollView.addSubview(label)
 
-        // Solid thought-dot (opaque white — not glass).
+        // Thought-dot: same tint + hairline border as the cloud body.
         let dotRect = CGRect(
-            x: (width - dotSize) / 2,
-            y: height + dotGap,
-            width: dotSize,
-            height: dotSize
+            x: (width - cloudDotSize) / 2,
+            y: height + cloudDotGap,
+            width: cloudDotSize,
+            height: cloudDotSize
         )
         let dot = UIView(frame: dotRect)
-        dot.backgroundColor = .white
-        dot.layer.cornerRadius = dotSize / 2
+        dot.backgroundColor = tintWithAlpha(tint, alpha: cloudTintAlpha)
+        dot.layer.cornerRadius = cloudDotSize / 2
+        dot.layer.borderWidth = 1
+        dot.layer.borderColor = UIColor.white.withAlphaComponent(0.55).cgColor
         dot.isUserInteractionEnabled = false
         dot.layer.shadowColor = UIColor.black.cgColor
         dot.layer.shadowOpacity = 0.15
-        dot.layer.shadowOffset = CGSize(width: 0, height: 4)
-        dot.layer.shadowRadius = 9
+        dot.layer.shadowOffset = CGSize(width: 0, height: 3)
+        dot.layer.shadowRadius = 8
         dot.layer.shadowPath = UIBezierPath(ovalIn: CGRect(origin: .zero, size: dotRect.size)).cgPath
         container.addSubview(dot)
         container.bringSubviewToFront(scrollView)
@@ -815,22 +820,12 @@ enum MarkerDialogBubbleBuilder {
         let cloudSize: CGSize
     }
 
-    /// Design corner radius of the cloud body (Figma path).
-    private static let cloudDesignCorner: CGFloat = 16
-
-    /// Horizontal inset for cloud text: [userPadding] plus clearance for the
-    /// rounded sides so lines don't kiss the curved edge.
-    private static func cloudHorizontalContentInset(userPadding: CGFloat) -> CGFloat {
-        let user = max(0, userPadding)
-        // ~half the design corner keeps wrapped lines inside the flat mid-body.
-        let shapeClearance = ceil(cloudDesignCorner * 0.5) // 8pt at design size
-        return user + shapeClearance
-    }
-
-    /// Sizes the cloud to the text. Text column is capped at [cloudMaxTextWidth].
+    /// Sizes the cloud like the note composer bubble: the body width is fixed
+    /// and the height grows with the wrapped text.
     private static func measureCloudText(
         attributed: NSAttributedString,
         font: UIFont,
+        lineHeight: CGFloat,
         explicitWidth: CGFloat,
         explicitHeight: CGFloat,
         hPad: CGFloat,
@@ -845,52 +840,38 @@ enum MarkerDialogBubbleBuilder {
             attrs = [.font: font]
         }
 
-        let wrapWidth: CGFloat
-        if explicitWidth > 0 {
-            wrapWidth = max(minTextWidth, min(cloudMaxTextWidth, explicitWidth - hPad * 2))
-        } else {
-            let single = ns.boundingRect(
-                with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: font.lineHeight * 2),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                attributes: attrs,
-                context: nil
-            )
-            wrapWidth = max(minTextWidth, min(cloudMaxTextWidth, ceil(single.width)))
-        }
+        let cloudW = explicitWidth > 0 ? explicitWidth : cloudWidth
+        let textWidth = max(minTextWidth, cloudW - hPad * 2)
 
         let full = ns.boundingRect(
-            with: CGSize(width: wrapWidth, height: CGFloat.greatestFiniteMagnitude),
+            with: CGSize(width: textWidth, height: CGFloat.greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: attrs,
             context: nil
         )
-        let fullTextHeight = max(ceil(font.lineHeight), ceil(full.height))
-        let maxVisible = ceil(font.lineHeight) * CGFloat(cloudMaxVisibleLines)
-            + CGFloat(max(0, cloudMaxVisibleLines - 1)) // lineSpacing ≈ 1
-        let visibleTextHeight = min(fullTextHeight, maxVisible)
-
-        var cloudW = ceil(wrapWidth + hPad * 2)
-        var cloudH = ceil(visibleTextHeight + vPad * 2 + max(6, visibleTextHeight * 0.18))
-        cloudW = max(cloudW, 52)
-        cloudH = max(cloudH, 36)
-
-        if explicitWidth > 0 { cloudW = explicitWidth }
-        if explicitHeight > 0 { cloudH = explicitHeight }
-
-        // Keep the text column at the measured wrap width (don't stretch it when
-        // the cloud is raised to the minimum size) so side padding stays real.
-        let finalTextW = max(
-            minTextWidth,
-            min(wrapWidth, min(cloudMaxTextWidth, cloudW - hPad * 2))
+        let fullTextHeight = max(lineHeight, ceil(full.height))
+        let visibleTextHeight = min(
+            fullTextHeight,
+            ceil(lineHeight * CGFloat(cloudMaxVisibleLines))
         )
-        let lobeReserve = cloudH * (6.0 / cloudDesignHeight)
+
+        // Scale the body so the path's 43/49 mid-section covers text + padding.
+        let bodyHeight = visibleTextHeight + vPad * 2
+        let cloudH = explicitHeight > 0
+            ? explicitHeight
+            : max(
+                cloudMinHeight,
+                ceil(bodyHeight * (cloudDesignHeight / cloudBodyDesignHeight))
+            )
+
+        let lobeReserve = cloudH * (1 - cloudBodyDesignHeight / cloudDesignHeight)
         let finalVisible = min(
             visibleTextHeight,
-            max(ceil(font.lineHeight), cloudH - lobeReserve - vPad * 2)
+            max(lineHeight, cloudH - lobeReserve - vPad * 2)
         )
 
         return CloudTextLayout(
-            textSize: CGSize(width: finalTextW, height: finalVisible),
+            textSize: CGSize(width: textWidth, height: finalVisible),
             visibleTextHeight: finalVisible,
             fullTextHeight: fullTextHeight,
             cloudSize: CGSize(width: cloudW, height: cloudH)
@@ -914,14 +895,14 @@ enum MarkerDialogBubbleBuilder {
         shadowLayer.path = path.cgPath
         shadowLayer.fillColor = UIColor.clear.cgColor
         shadowLayer.shadowColor = UIColor.black.cgColor
-        shadowLayer.shadowOpacity = 0.15
+        shadowLayer.shadowOpacity = 0.18
         shadowLayer.shadowOffset = CGSize(width: 0, height: 4)
-        shadowLayer.shadowRadius = 9
+        shadowLayer.shadowRadius = 10
         shadowLayer.shadowPath = path.cgPath
         host.layer.addSublayer(shadowLayer)
 
-        // Force ~90% opacity on the caller tint (Liquid Glass / fallback).
-        let glassTint = tintWithAlpha(tint, alpha: 0.90)
+        // Force ~80% opacity on the caller tint (Liquid Glass / fallback).
+        let glassTint = tintWithAlpha(tint, alpha: cloudTintAlpha)
 
         let effectView: UIVisualEffectView
         if #available(iOS 26.0, *) {
@@ -972,6 +953,11 @@ enum MarkerDialogBubbleBuilder {
         return color.withAlphaComponent(alpha)
     }
 
+    /// Shared by cloud dialog + liquid-glass marker borders.
+    static func tintWithAlphaForGlass(_ color: UIColor, alpha: CGFloat) -> UIColor {
+        tintWithAlpha(color, alpha: alpha)
+    }
+
     /// Opaque white silhouette used as `UIVisualEffectView.mask` (alpha = visibility).
     private static func makePathImageMaskView(path: UIBezierPath, bounds: CGRect) -> UIView {
         let format = UIGraphicsImageRendererFormat.default()
@@ -982,6 +968,31 @@ enum MarkerDialogBubbleBuilder {
             UIRectFill(CGRect(origin: .zero, size: bounds.size))
             UIColor.white.setFill()
             path.fill()
+        }
+        let imageView = UIImageView(image: image)
+        imageView.frame = bounds
+        imageView.backgroundColor = .clear
+        imageView.isUserInteractionEnabled = false
+        return imageView
+    }
+
+    /// Shared solid path mask (full disc / cloud body).
+    static func makePathMaskView(path: UIBezierPath, bounds: CGRect) -> UIView {
+        makePathImageMaskView(path: path, bounds: bounds)
+    }
+
+    /// Even-odd path mask (e.g. glass ring: outer circle minus inner circle).
+    static func makeEvenOddPathMaskView(path: UIBezierPath, bounds: CGRect) -> UIView {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        format.scale = UIScreen.main.scale
+        let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { ctx in
+            UIColor.clear.setFill()
+            UIRectFill(CGRect(origin: .zero, size: bounds.size))
+            UIColor.white.setFill()
+            // `UIBezierPath.fill(with:alpha:)` takes CGBlendMode — use CGContext fill rule.
+            ctx.cgContext.addPath(path.cgPath)
+            ctx.cgContext.fillPath(using: .evenOdd)
         }
         let imageView = UIImageView(image: image)
         imageView.frame = bounds
@@ -1148,7 +1159,9 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     private var imageLoadToken: String?
 
     override var annotation: MKAnnotation? {
-        didSet { applyAnnotationIfNeeded(force: true) }
+        // Signature-gated: coordinate-only moves / viewFor re-queries must not
+        // tear down and rebuild the avatar chrome (visible flicker while walking).
+        didSet { applyAnnotationIfNeeded(force: false) }
     }
 
     override func prepareForReuse() {
@@ -1190,7 +1203,7 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     func configureIfNeeded() {
-        applyAnnotationIfNeeded(force: true)
+        applyAnnotationIfNeeded(force: false)
     }
 
     override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
@@ -1204,6 +1217,14 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
            let markerBody = content.viewWithTag(MarkerDialogBubbleBuilder.markerBodyTag) {
             content.layer.shadowOpacity = 0
             MarkerShadowStyle.apply(to: markerBody, from: flutter)
+            return
+        }
+        // Liquid-glass border already draws its own sibling shadow layer; a CALayer
+        // shadow on the content host would kill the glass backdrop sample.
+        if let flutter = resolvedFlutterAnnotation(),
+           flutter.dopinLiquidGlassBorder,
+           let content = content {
+            content.layer.shadowOpacity = 0
             return
         }
         super.applyFlutterMarkerShadow(contentView: content)
@@ -1252,6 +1273,11 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     private func loadMarkerImages(into content: UIView, annotation: FlutterAnnotation) {
         let token = annotation.dopinMarkerSignature
         imageLoadToken = token
+
+        // Emoji-center markers (category pin) — including empty glyph.
+        if annotation.dopinEmoji != nil {
+            return
+        }
 
         let imageViews = Self.findImageViews(in: content)
         let urlCount = min(annotation.dopinImageUrls.count, 4)
@@ -1468,17 +1494,39 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     private static func buildSingleImageMarker(annotation: FlutterAnnotation) -> UIView {
+        // Category pin: `emoji` key present (glyph may be empty).
+        if let emoji = annotation.dopinEmoji {
+            return buildEmojiGlassMarker(annotation: annotation, emoji: emoji)
+        }
+
         let frameW = annotation.dopinFrameWidth
         let frameH = annotation.dopinFrameHeight
         let border = annotation.dopinBorderWidth
         let outerRadius = annotation.dopinBorderRadius ?? min(frameW, frameH) / 2
         let innerRadius = max(0, outerRadius - border)
 
-        let frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
-        frameView.backgroundColor = annotation.dopinBorderColor
-        frameView.layer.cornerRadius = outerRadius
-        frameView.layer.cornerCurve = .continuous
-        frameView.clipsToBounds = true
+        let frameView: UIView
+        if annotation.dopinLiquidGlassBorder {
+            frameView = buildLiquidGlassBorderFrame(
+                frameW: frameW,
+                frameH: frameH,
+                border: border,
+                outerRadius: outerRadius,
+                innerRadius: innerRadius,
+                tint: annotation.dopinBorderColor,
+                shadowEnabled: annotation.markerShadowEnabled,
+                shadowColor: annotation.markerShadowColor,
+                shadowBlurRadius: annotation.markerShadowBlurRadius,
+                shadowOffsetX: annotation.markerShadowOffsetX,
+                shadowOffsetY: annotation.markerShadowOffsetY
+            )
+        } else {
+            frameView = UIView(frame: CGRect(x: 0, y: 0, width: frameW, height: frameH))
+            frameView.backgroundColor = annotation.dopinBorderColor
+            frameView.layer.cornerRadius = outerRadius
+            frameView.layer.cornerCurve = .continuous
+            frameView.clipsToBounds = true
+        }
 
         let avatarSide = max(0, min(frameW, frameH) - border * 2)
         let avatarWrap = UIView(frame: CGRect(x: 0, y: 0, width: avatarSide, height: avatarSide))
@@ -1491,6 +1539,246 @@ final class DopinMarkerAnnotationView: GlowFlutterAnnotationView {
         frameView.addSubview(avatarWrap)
 
         return wrapMarkerWithBadge(frameView: frameView, frameW: frameW, frameH: frameH, annotation: annotation)
+    }
+
+    /// Figma category pin: Liquid Glass ring (`borderWidth`, default 3) + centered emoji.
+    private static func buildEmojiGlassMarker(
+        annotation: FlutterAnnotation,
+        emoji: String
+    ) -> UIView {
+        let frameW = annotation.dopinFrameWidth
+        let frameH = annotation.dopinFrameHeight
+        let border = max(annotation.dopinBorderWidth, 0)
+        let outerRadius = annotation.dopinBorderRadius ?? min(frameW, frameH) / 2
+        let innerRadius = max(0, outerRadius - border)
+        let bounds = CGRect(x: 0, y: 0, width: frameW, height: frameH)
+
+        let frameView: UIView
+        if annotation.dopinLiquidGlassBorder && border > 0 {
+            frameView = buildLiquidGlassBorderFrame(
+                frameW: frameW,
+                frameH: frameH,
+                border: border,
+                outerRadius: outerRadius,
+                innerRadius: innerRadius,
+                tint: annotation.dopinBorderColor,
+                shadowEnabled: annotation.markerShadowEnabled,
+                shadowColor: annotation.markerShadowColor,
+                shadowBlurRadius: annotation.markerShadowBlurRadius,
+                shadowOffsetX: annotation.markerShadowOffsetX,
+                shadowOffsetY: annotation.markerShadowOffsetY
+            )
+        } else if annotation.dopinLiquidGlassBorder {
+            frameView = buildLiquidGlassFillFrame(
+                bounds: bounds,
+                outerRadius: outerRadius,
+                tint: annotation.dopinBorderColor,
+                shadowEnabled: annotation.markerShadowEnabled,
+                shadowColor: annotation.markerShadowColor,
+                shadowBlurRadius: annotation.markerShadowBlurRadius,
+                shadowOffsetX: annotation.markerShadowOffsetX,
+                shadowOffsetY: annotation.markerShadowOffsetY
+            )
+        } else {
+            frameView = UIView(frame: bounds)
+            frameView.backgroundColor = annotation.dopinBorderColor
+            frameView.layer.cornerRadius = outerRadius
+            frameView.layer.cornerCurve = .continuous
+            frameView.clipsToBounds = true
+        }
+
+        let centerSide = max(0, min(frameW, frameH) - border * 2)
+        let center = UIView(frame: CGRect(x: 0, y: 0, width: centerSide, height: centerSide))
+        center.backgroundColor = .white
+        center.layer.cornerRadius = innerRadius
+        center.layer.cornerCurve = .continuous
+        center.clipsToBounds = true
+        center.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        center.isUserInteractionEnabled = false
+
+        let emojiLabel = UILabel(frame: center.bounds)
+        emojiLabel.text = emoji
+        emojiLabel.textAlignment = .center
+        emojiLabel.baselineAdjustment = .alignCenters
+        // Figma: ~20pt on 40pt disc.
+        emojiLabel.font = .systemFont(ofSize: min(frameW, frameH) * 0.5)
+        emojiLabel.adjustsFontSizeToFitWidth = true
+        emojiLabel.minimumScaleFactor = 0.5
+        emojiLabel.isUserInteractionEnabled = false
+        emojiLabel.isHidden = emoji.isEmpty
+        center.addSubview(emojiLabel)
+        frameView.addSubview(center)
+
+        return wrapMarkerWithBadge(
+            frameView: frameView,
+            frameW: frameW,
+            frameH: frameH,
+            annotation: annotation
+        )
+    }
+
+    /// Full-disc Liquid Glass (category emoji pin) — not a hollow ring.
+    private static func buildLiquidGlassFillFrame(
+        bounds: CGRect,
+        outerRadius: CGFloat,
+        tint: UIColor,
+        shadowEnabled: Bool,
+        shadowColor: UIColor,
+        shadowBlurRadius: CGFloat,
+        shadowOffsetX: CGFloat,
+        shadowOffsetY: CGFloat
+    ) -> UIView {
+        let host = UIView(frame: bounds)
+        host.backgroundColor = .clear
+        host.clipsToBounds = false
+        host.isUserInteractionEnabled = false
+
+        let discPath = UIBezierPath(roundedRect: bounds, cornerRadius: outerRadius)
+
+        if shadowEnabled {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            shadowColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+            let shadowLayer = CAShapeLayer()
+            shadowLayer.frame = bounds
+            shadowLayer.path = discPath.cgPath
+            shadowLayer.fillColor = UIColor.clear.cgColor
+            shadowLayer.shadowColor = UIColor(red: r, green: g, blue: b, alpha: 1).cgColor
+            shadowLayer.shadowOpacity = Float(a)
+            shadowLayer.shadowOffset = CGSize(width: shadowOffsetX, height: shadowOffsetY)
+            shadowLayer.shadowRadius = shadowBlurRadius
+            shadowLayer.shadowPath = discPath.cgPath
+            host.layer.addSublayer(shadowLayer)
+        }
+
+        let glassTint = MarkerDialogBubbleBuilder.tintWithAlphaForGlass(tint, alpha: 0.90)
+
+        let effectView: UIVisualEffectView
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect(style: .regular)
+            glass.isInteractive = false
+            glass.tintColor = glassTint
+            effectView = UIVisualEffectView(effect: glass)
+        } else {
+            effectView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
+            let tintView = UIView(frame: bounds)
+            tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            tintView.backgroundColor = glassTint
+            effectView.contentView.addSubview(tintView)
+
+            let sheen = CAGradientLayer()
+            sheen.frame = bounds
+            sheen.colors = [
+                UIColor.white.withAlphaComponent(0.22).cgColor,
+                UIColor.white.withAlphaComponent(0.0).cgColor,
+            ]
+            sheen.startPoint = CGPoint(x: 0, y: 0)
+            sheen.endPoint = CGPoint(x: 1, y: 1)
+            effectView.contentView.layer.addSublayer(sheen)
+        }
+
+        effectView.frame = bounds
+        effectView.isUserInteractionEnabled = false
+        effectView.mask = MarkerDialogBubbleBuilder.makePathMaskView(path: discPath, bounds: bounds)
+        host.addSubview(effectView)
+
+        let rim = CAShapeLayer()
+        rim.frame = bounds
+        rim.path = discPath.cgPath
+        rim.fillColor = UIColor.clear.cgColor
+        rim.strokeColor = UIColor.white.withAlphaComponent(0.55).cgColor
+        rim.lineWidth = 1
+        host.layer.addSublayer(rim)
+
+        return host
+    }
+
+    /// Circular / rounded frame whose ring uses Liquid Glass (iOS 26+) or frosted blur.
+    ///
+    /// Host stays unmasked so `UIVisualEffectView` can sample the map; the ring is
+    /// applied via an even-odd path mask. Drop shadow is a sibling shape layer so it
+    /// does not force an offscreen pass on the glass effect.
+    private static func buildLiquidGlassBorderFrame(
+        frameW: CGFloat,
+        frameH: CGFloat,
+        border: CGFloat,
+        outerRadius: CGFloat,
+        innerRadius: CGFloat,
+        tint: UIColor,
+        shadowEnabled: Bool,
+        shadowColor: UIColor,
+        shadowBlurRadius: CGFloat,
+        shadowOffsetX: CGFloat,
+        shadowOffsetY: CGFloat
+    ) -> UIView {
+        let bounds = CGRect(x: 0, y: 0, width: frameW, height: frameH)
+        let host = UIView(frame: bounds)
+        host.backgroundColor = .clear
+        host.clipsToBounds = false
+        host.isUserInteractionEnabled = false
+
+        let outerPath = UIBezierPath(roundedRect: bounds, cornerRadius: outerRadius)
+        outerPath.usesEvenOddFillRule = true
+        let inset = border
+        let innerBounds = bounds.insetBy(dx: inset, dy: inset)
+        let innerPath = UIBezierPath(roundedRect: innerBounds, cornerRadius: innerRadius)
+        outerPath.append(innerPath)
+
+        if shadowEnabled {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            shadowColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+            let shadowLayer = CAShapeLayer()
+            shadowLayer.frame = bounds
+            shadowLayer.path = UIBezierPath(roundedRect: bounds, cornerRadius: outerRadius).cgPath
+            shadowLayer.fillColor = UIColor.clear.cgColor
+            shadowLayer.shadowColor = UIColor(red: r, green: g, blue: b, alpha: 1).cgColor
+            shadowLayer.shadowOpacity = Float(a)
+            shadowLayer.shadowOffset = CGSize(width: shadowOffsetX, height: shadowOffsetY)
+            shadowLayer.shadowRadius = shadowBlurRadius
+            shadowLayer.shadowPath = shadowLayer.path
+            host.layer.addSublayer(shadowLayer)
+        }
+
+        let glassTint = MarkerDialogBubbleBuilder.tintWithAlphaForGlass(tint, alpha: 0.90)
+
+        let effectView: UIVisualEffectView
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect(style: .regular)
+            glass.isInteractive = false
+            glass.tintColor = glassTint
+            effectView = UIVisualEffectView(effect: glass)
+        } else {
+            effectView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
+            let tintView = UIView(frame: bounds)
+            tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            tintView.backgroundColor = glassTint
+            effectView.contentView.addSubview(tintView)
+
+            let sheen = CAGradientLayer()
+            sheen.frame = bounds
+            sheen.colors = [
+                UIColor.white.withAlphaComponent(0.22).cgColor,
+                UIColor.white.withAlphaComponent(0.0).cgColor,
+            ]
+            sheen.startPoint = CGPoint(x: 0, y: 0)
+            sheen.endPoint = CGPoint(x: 1, y: 1)
+            effectView.contentView.layer.addSublayer(sheen)
+        }
+
+        effectView.frame = bounds
+        effectView.isUserInteractionEnabled = false
+        effectView.mask = MarkerDialogBubbleBuilder.makeEvenOddPathMaskView(path: outerPath, bounds: bounds)
+        host.addSubview(effectView)
+
+        // Subtle rim highlight so the ring reads against busy map tiles.
+        let rim = CAShapeLayer()
+        rim.frame = bounds
+        rim.path = UIBezierPath(roundedRect: bounds, cornerRadius: outerRadius).cgPath
+        rim.fillColor = UIColor.clear.cgColor
+        rim.strokeColor = UIColor.white.withAlphaComponent(0.55).cgColor
+        rim.lineWidth = 1
+        host.layer.addSublayer(rim)
+
+        return host
     }
 }
 
@@ -1686,7 +1974,7 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
     private var imageLoadToken: String?
 
     override var annotation: MKAnnotation? {
-        didSet { applyAnnotationIfNeeded(force: true) }
+        didSet { applyAnnotationIfNeeded(force: false) }
     }
 
     override func prepareForReuse() {
@@ -1705,7 +1993,7 @@ final class SvgMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     func configureIfNeeded() {
-        applyAnnotationIfNeeded(force: true)
+        applyAnnotationIfNeeded(force: false)
     }
 
     override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
@@ -1876,7 +2164,7 @@ final class CardMarkerAnnotationView: GlowFlutterAnnotationView {
     private var imageLoadToken: String?
 
     override var annotation: MKAnnotation? {
-        didSet { applyAnnotationIfNeeded(force: true) }
+        didSet { applyAnnotationIfNeeded(force: false) }
     }
 
     override func prepareForReuse() {
@@ -1895,7 +2183,7 @@ final class CardMarkerAnnotationView: GlowFlutterAnnotationView {
     }
 
     func configureIfNeeded() {
-        applyAnnotationIfNeeded(force: true)
+        applyAnnotationIfNeeded(force: false)
     }
 
     override func applyFlutterMarkerShadow(contentView: UIView? = nil) {
@@ -2495,7 +2783,7 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
     private var imageLoadToken: String?
 
     override var annotation: MKAnnotation? {
-        didSet { applyClusterIfNeeded(force: true) }
+        didSet { applyClusterIfNeeded(force: false) }
     }
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
@@ -2519,7 +2807,7 @@ final class ClusterMarkerAnnotationView: MKAnnotationView {
     }
 
     func configureIfNeeded() {
-        applyClusterIfNeeded(force: true)
+        applyClusterIfNeeded(force: false)
     }
 
     private func applyClusterIfNeeded(force: Bool) {

@@ -224,11 +224,15 @@ class AppleMapController {
   /// See [setCameraOffset] for axis conventions.
   Offset get cameraOffset => _cameraOffset;
 
-  /// Sets a persistent screen-space offset for camera targets.
+  /// Sets a persistent view-center offset for camera targets.
+  ///
+  /// Different from MapKit / move **padding**: offset shifts where the map
+  /// treats center for every later [animateCamera] / [moveCamera]. Padding
+  /// frames a single update (bounds / Mapbox); do not pass padding here.
   ///
   /// Call this **once** (typically in `onMapCreated`). Every later
   /// [animateCamera] / [moveCamera] reuses the same offset until you change
-  /// it or call [clearCameraOffset]. You do not pass padding on each move.
+  /// it or call [clearCameraOffset].
   ///
   /// ## Offset axes (screen points)
   ///
@@ -261,7 +265,7 @@ class AppleMapController {
   /// * Does not affect [CameraUpdate.newLatLngBounds] (that API has its own
   ///   edge padding).
   /// * Orbit APIs ([setOrbitFrame], [startCameraOrbit]) still take their own
-  ///   `verticalScreenOffset` / padding and are independent of this value.
+  ///   `verticalScreenOffset` and are independent of this value.
   /// * Changing the offset alone does not move the camera; call
   ///   [animateCamera] or [moveCamera] afterward.
   /// * Use [Offset.zero] or [clearCameraOffset] to restore screen-center
@@ -486,13 +490,19 @@ class AppleMapController {
     return setTrackingMode(TrackingMode.none);
   }
 
-  /// Deselects any selected annotations, including native MapKit POI features.
+  /// Hides the native MapKit POI detail/callout for the currently selected POI.
   ///
-  /// Use when leaving a POI picker so the selected callout does not stick on a
-  /// shared map after [AppleMap.showPointsOfInterest] is turned off.
-  Future<void> clearSelection() {
+  /// Also deselects any selected Flutter annotations. Call when leaving a POI
+  /// picker (e.g. back to home) or before covering the map for create flows so
+  /// the callout does not stick after [AppleMap.showPointsOfInterest] is off.
+  Future<void> hidePOIDetail() {
     return channel.invokeMethod<void>('map#clearSelection');
   }
+
+  /// Deselects any selected annotations, including native MapKit POI features.
+  ///
+  /// Prefer [hidePOIDetail] when the intent is dismissing a POI callout.
+  Future<void> clearSelection() => hidePOIDetail();
 
   /// Returns the image bytes of the map
   Future<Uint8List?> takeSnapshot(

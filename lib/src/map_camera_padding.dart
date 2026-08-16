@@ -1,6 +1,9 @@
 part of apple_maps_flutter;
 
-/// Padding helpers for camera focus / orbit-frame positioning.
+/// Helpers to derive a view-center [Offset] from chrome/sheet edge insets.
+///
+/// These are **not** move-padding APIs — they convert inset asymmetry into the
+/// same numbers [AppleMapController.setCameraOffset] expects.
 class MapCameraPadding {
   const MapCameraPadding._();
 

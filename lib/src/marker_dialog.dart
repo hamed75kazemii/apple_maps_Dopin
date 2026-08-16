@@ -49,7 +49,7 @@ class MarkerDialog {
 
   /// Bubble body width in points (not including the tail).
   ///
-  /// For [MarkerDialogStyle.cloud], `0` means auto-size to [text].
+  /// For [MarkerDialogStyle.cloud], `0` means [cloudWidth].
   final double width;
 
   /// Bubble body height in points (not including the tail).
@@ -69,8 +69,7 @@ class MarkerDialog {
 
   /// Vertical space between the dialog tail tip and the marker top.
   ///
-  /// Negative values overlap the tail onto the marker (used by [CloudDialogBox]
-  /// so the thought-dot sits on the avatar).
+  /// Negative values overlap the tail onto the marker.
   final double gapAboveMarker;
 
   /// Marquee speed in points per second when [text] overflows [width].
@@ -81,11 +80,26 @@ class MarkerDialog {
   /// Bubble appearance. Defaults to the classic dark pill.
   final MarkerDialogStyle style;
 
-  /// Max text column width (logical px) for [CloudDialogBox] line wrapping.
-  static const double cloudMaxTextWidth = 64;
+  /// Cloud body width. Fixed so the map bubble and the note composer bubble
+  /// are the same shape.
+  static const double cloudWidth = 80;
+
+  /// One-line cloud body height; grows when the text wraps further.
+  static const double cloudMinHeight = 56;
+
+  /// Detached thought-dot diameter and its gap below the cloud body.
+  static const double cloudDotSize = 10;
+  static const double cloudDotGap = 2;
+
+  /// Line height multiple used by every cloud bubble.
+  static const double cloudLineHeightFactor = 1.2;
 
   /// Visible lines in [CloudDialogBox] before the text area scrolls.
   static const int cloudMaxVisibleLines = 3;
+
+  /// Figma cloud is 49pt tall and its body ends at y=43 — the rest is the lobe.
+  static const double _cloudDesignHeight = 49;
+  static const double _cloudBodyDesignHeight = 43;
 
   String get _resolvedText {
     if (style != MarkerDialogStyle.cloud) return text;
@@ -93,43 +107,39 @@ class MarkerDialog {
   }
 
   /// Estimated cloud body size for layout/anchor when [width]/[height] are auto (`0`).
+  ///
+  /// Mirrors the native bubble: fixed [cloudWidth], height grown from the
+  /// wrapped text (up to [cloudMaxVisibleLines], after which the text scrolls).
   static Size estimateCloudBodySize({
     required String text,
     double fontSize = 12,
     double horizontalPadding = 4,
-    double verticalPadding = 6,
+    double verticalPadding = 10,
   }) {
     final String cleaned = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (cleaned.isEmpty) {
-      return const Size(52, 36);
-    }
-    // Matches iOS cloudHorizontalContentInset (user pad + ~8pt corner clearance).
-    const double shapeClearance = 8;
-    final double hPad = horizontalPadding + shapeClearance;
-    final double vPad = verticalPadding;
+    final double textWidth =
+        (cloudWidth - horizontalPadding * 2).clamp(24.0, cloudWidth);
     final TextPainter painter = TextPainter(
       text: TextSpan(
-        text: cleaned,
+        text: cleaned.isEmpty ? ' ' : cleaned,
         style: TextStyle(
           fontSize: fontSize,
-          height: 1.15,
+          height: cloudLineHeightFactor,
           fontFamily: '.SF Pro Rounded',
         ),
       ),
+      textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
-    );
-    painter.layout(maxWidth: cloudMaxTextWidth);
-    final double textW =
-        painter.width.clamp(24.0, cloudMaxTextWidth).toDouble();
-    final double fullH = painter.height;
-    final double lineH = fontSize * 1.15;
-    final double visibleH = fullH < lineH * cloudMaxVisibleLines
-        ? fullH
-        : lineH * cloudMaxVisibleLines;
-    final double cloudW = (textW + hPad * 2).clamp(52.0, 200.0);
-    final double lobeExtra = visibleH * 0.18 > 6 ? visibleH * 0.18 : 6;
-    final double cloudH = (visibleH + vPad * 2 + lobeExtra).clamp(36.0, 140.0);
-    return Size(cloudW, cloudH);
+    )..layout(maxWidth: textWidth);
+
+    final double maxVisibleH =
+        fontSize * cloudLineHeightFactor * cloudMaxVisibleLines;
+    final double visibleH =
+        painter.height < maxVisibleH ? painter.height : maxVisibleH;
+    final double bodyH = visibleH + verticalPadding * 2;
+    final double cloudH =
+        bodyH * (_cloudDesignHeight / _cloudBodyDesignHeight);
+    return Size(cloudWidth, cloudH < cloudMinHeight ? cloudMinHeight : cloudH);
   }
 
   Map<String, dynamic> _toJson() {
@@ -183,33 +193,34 @@ class MarkerDialog {
 
 /// Cloud thought-bubble dialog with frosted-glass fill (iOS).
 ///
-/// Pass to [Annotation.dialog] like [MarkerDialog]. Text wraps at
-/// [MarkerDialog.cloudMaxTextWidth] (64). Up to
+/// Pass to [Annotation.dialog] like [MarkerDialog]. Text wraps inside
+/// [MarkerDialog.cloudWidth] minus [horizontalPadding]. Up to
 /// [MarkerDialog.cloudMaxVisibleLines] (3) lines are shown; longer text scrolls.
 ///
-/// With default [width]/[height] of `0`, the native bubble sizes itself to the text.
+/// With default [width]/[height] of `0`, the native bubble uses the shared note
+/// bubble metrics: fixed [MarkerDialog.cloudWidth], height grown from the text.
 @immutable
 class CloudDialogBox extends MarkerDialog {
   const CloudDialogBox({
     required String text,
 
-    /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
+    /// `0` = [MarkerDialog.cloudWidth]. Set an explicit value to pin that axis.
     double width = 0,
 
     /// `0` = auto-size to [text]. Set an explicit value to pin that axis.
     double height = 0,
 
-    /// Liquid Glass tint (~90% opacity white). Native forces alpha to 0.90.
-    Color backgroundColor = const Color(0xE6FFFFFF),
+    /// Liquid Glass tint (~80% opacity white). Native forces alpha to 0.80.
+    Color backgroundColor = const Color(0xCCFFFFFF),
 
     /// Text / font color inside the cloud. Defaults to black.
     Color textColor = Colors.black,
     double fontSize = 12,
     double horizontalPadding = 4,
-    double verticalPadding = 6,
+    double verticalPadding = 10,
 
-    /// Slight overlap so the thought-dot still kisses the marker.
-    double gapAboveMarker = -5,
+    /// Space between the thought-dot and the marker top.
+    double gapAboveMarker = 8,
     double marqueeSpeed = 16,
   }) : super(
           text: text,

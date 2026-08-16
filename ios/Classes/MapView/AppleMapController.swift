@@ -95,14 +95,16 @@ public class AppleMapController: NSObject, FlutterPlatformView {
     }
 
     /// Stops display links, clears the method channel handler, and marks the
-    /// controller disposed. Idempotent — safe from Dart `map#dispose`, view
-    /// teardown, and `deinit`.
+    /// controller disposed. Idempotent — only call from Dart `map#dispose`
+    /// (Flutter widget teardown). Do **not** dispose when the platform view
+    /// briefly leaves the window (route overlays, sheets, hybrid composition
+    /// reparent); that clears the method channel while Dart still owns the
+    /// map and surfaces as MissingPluginException on map#update / annotations#update.
     func dispose() {
         guard !isDisposed else { return }
         isDisposed = true
         disposeNativeResources()
         channel.setMethodCallHandler(nil)
-        mapView.onRemovedFromWindow = nil
         mapView.delegate = nil
         annotationsById.removeAll()
     }
@@ -142,9 +144,6 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.mapView.onUserLocationClear = { [weak self] in
             self?.removeUserLocationMarker()
         }
-        self.mapView.onRemovedFromWindow = { [weak self] in
-            self?.dispose()
-        }
 
         self.mapView.setCenterCoordinate(initialCameraPosition, animated: false)
         self.setMethodCallHandlers()
@@ -176,10 +175,16 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         guard options.keys.contains("myLocationMarker") else { return }
 
         if let markerData = Self.customUserLocationMarkerData(from: options) {
+            let previous = mapView.userLocationMarkerData
+            let styleChanged = previous == nil
+                || !Self.myLocationMarkerStyleEqual(previous!, markerData)
             mapView.userLocationMarkerData = markerData
-            // Recreate so style changes (e.g. CloudDialogBox) apply immediately.
+
             let coordinate = mapView.lastUserCoordinate ?? mapView.userLocation.coordinate
-            removeUserLocationMarker()
+            if styleChanged {
+                // Recreate only when avatar / dialog / chrome actually changes.
+                removeUserLocationMarker()
+            }
             if FlutterMapView.isValidUserCoordinate(coordinate) {
                 syncUserLocationMarker(at: coordinate)
             } else if options["myLocationEnabled"] as? Bool == true {
@@ -204,6 +209,14 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         from options: Dictionary<String, Any>
     ) -> Dictionary<String, Any>? {
         return options["myLocationMarker"] as? Dictionary<String, Any>
+    }
+
+    /// Deep-compare Flutter my-location style payloads (ignores live coordinates).
+    private static func myLocationMarkerStyleEqual(
+        _ a: Dictionary<String, Any>,
+        _ b: Dictionary<String, Any>
+    ) -> Bool {
+        NSDictionary(dictionary: a).isEqual(to: b)
     }
 
     private func setMethodCallHandlers() {
@@ -334,7 +347,7 @@ public class AppleMapController: NSObject, FlutterPlatformView {
                     result(nil)
                     break
                 case "map#clearSelection":
-                    self.mapView.clearSelection(animated: false)
+                    self.mapView.hidePOIDetail(animated: false)
                     result(nil)
                     break
                 default:

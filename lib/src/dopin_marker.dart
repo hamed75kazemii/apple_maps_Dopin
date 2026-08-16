@@ -11,12 +11,14 @@ part of apple_maps_flutter;
 /// [width] / [height] define the outer frame: 1 and 3–4 images use the full size;
 /// 2 images use full [width] and half [height]. Images shrink inside the fixed frame.
 /// Default [borderRadius] is `12`. Pass `null` for a full circle.
+/// When [emoji] is set, native draws a centered emoji (image content is skipped).
 @immutable
 class DopinMarker {
   const DopinMarker({
     this.imageUrls,
     this.imagePng,
     this.imageFromAsset,
+    this.emoji,
     this.label,
     this.count,
     this.width = 40,
@@ -24,6 +26,7 @@ class DopinMarker {
     this.borderWidth = 2,
     this.borderColor = Colors.white,
     this.borderRadius = 12,
+    this.liquidGlassBorder = false,
     this.labelFontSize = 10,
     this.badgeHeight = 18,
     this.labelColor = const Color(0xFF7B2CBF),
@@ -34,6 +37,7 @@ class DopinMarker {
 
   factory DopinMarker.withPng({
     required Uint8List imagePng,
+    String? emoji,
     String? label,
     int? count,
     double width = 40,
@@ -41,6 +45,7 @@ class DopinMarker {
     double borderWidth = 2,
     Color borderColor = Colors.white,
     double? borderRadius = 12,
+    bool liquidGlassBorder = false,
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
@@ -50,6 +55,7 @@ class DopinMarker {
   }) {
     return DopinMarker(
       imagePng: imagePng,
+      emoji: emoji,
       label: label,
       count: count,
       width: width,
@@ -57,6 +63,7 @@ class DopinMarker {
       borderWidth: borderWidth,
       borderColor: borderColor,
       borderRadius: borderRadius,
+      liquidGlassBorder: liquidGlassBorder,
       labelFontSize: labelFontSize,
       badgeHeight: badgeHeight,
       labelColor: labelColor,
@@ -72,6 +79,7 @@ class DopinMarker {
     AssetBundle? bundle,
     String? package,
     bool mipmaps = true,
+    String? emoji,
     String? label,
     int? count,
     double width = 40,
@@ -79,6 +87,7 @@ class DopinMarker {
     double borderWidth = 2,
     Color borderColor = Colors.white,
     double? borderRadius = 12,
+    bool liquidGlassBorder = false,
     double labelFontSize = 10,
     double badgeHeight = 18,
     Color labelColor = const Color(0xFF7B2CBF),
@@ -100,6 +109,7 @@ class DopinMarker {
     }
     return DopinMarker(
       imageFromAsset: assetJson,
+      emoji: emoji,
       label: label,
       count: count,
       width: width,
@@ -107,6 +117,7 @@ class DopinMarker {
       borderWidth: borderWidth,
       borderColor: borderColor,
       borderRadius: borderRadius,
+      liquidGlassBorder: liquidGlassBorder,
       labelFontSize: labelFontSize,
       badgeHeight: badgeHeight,
       labelColor: labelColor,
@@ -122,6 +133,10 @@ class DopinMarker {
   final Uint8List? imagePng;
   final List<dynamic>? imageFromAsset;
 
+  /// Center emoji glyph. When non-empty, native skips image content and draws
+  /// the emoji (optionally on a Liquid Glass disc when [liquidGlassBorder]).
+  final String? emoji;
+
   /// Bottom badge; `null` or empty = no badge.
   final String? label;
 
@@ -135,6 +150,11 @@ class DopinMarker {
 
   /// Outer corner radius. Defaults to `12`. `null` → circle (half of min [width], [height]).
   final double? borderRadius;
+
+  /// When true, native iOS draws a Liquid Glass ring for the border (iOS 26+;
+  /// frosted blur fallback on earlier versions) instead of a solid fill.
+  /// With [emoji], draws a full Liquid Glass disc instead of a ring.
+  final bool liquidGlassBorder;
 
   final double labelFontSize;
   final double badgeHeight;
@@ -160,12 +180,18 @@ class DopinMarker {
       'badgeHeight': badgeHeight,
       'labelColor': labelColor.value,
       'labelBackgroundColor': labelBackgroundColor.value,
+      if (liquidGlassBorder) 'liquidGlassBorder': true,
       if (imageUrls != null && imageUrls!.isNotEmpty)
         'imageUrls': imageUrls!.take(4).toList(),
       if (imagePng != null) 'imagePng': imagePng,
       if (imageFromAsset != null) 'imageFromAsset': imageFromAsset,
       if (borderRadius != null) 'borderRadius': borderRadius,
     };
+    final String? trimmedEmoji = emoji;
+    // Include even when empty — marks native emoji-center pin (vs avatar).
+    if (trimmedEmoji != null) {
+      json['emoji'] = trimmedEmoji.trim();
+    }
     final String? trimmed = label?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
       json['label'] = trimmed;
@@ -175,12 +201,12 @@ class DopinMarker {
     }
     if (labelGradientColors != null && labelGradientColors!.length >= 2) {
       json['labelGradientColors'] =
-          labelGradientColors!.map((Color c) => c.value).toList();
+          labelGradientColors!.map((c) => c.value).toList();
     }
     if (labelBackgroundGradientColors != null &&
         labelBackgroundGradientColors!.length >= 2) {
       json['labelBackgroundGradientColors'] =
-          labelBackgroundGradientColors!.map((Color c) => c.value).toList();
+          labelBackgroundGradientColors!.map((c) => c.value).toList();
     }
     return json;
   }
@@ -193,6 +219,7 @@ class DopinMarker {
     return _listEqual(imageUrls, o.imageUrls) &&
         _bytesEqual(imagePng, o.imagePng) &&
         _listEqual(imageFromAsset, o.imageFromAsset) &&
+        emoji == o.emoji &&
         label == o.label &&
         count == o.count &&
         width == o.width &&
@@ -200,6 +227,7 @@ class DopinMarker {
         borderWidth == o.borderWidth &&
         borderColor == o.borderColor &&
         borderRadius == o.borderRadius &&
+        liquidGlassBorder == o.liquidGlassBorder &&
         labelFontSize == o.labelFontSize &&
         badgeHeight == o.badgeHeight &&
         labelColor == o.labelColor &&
@@ -214,6 +242,7 @@ class DopinMarker {
         imageUrls == null ? null : Object.hashAll(imageUrls!),
         imagePng?.length,
         imageFromAsset == null ? null : Object.hashAll(imageFromAsset!),
+        emoji,
         label,
         count,
         width,
@@ -221,6 +250,7 @@ class DopinMarker {
         borderWidth,
         borderColor,
         borderRadius,
+        liquidGlassBorder,
         labelFontSize,
         badgeHeight,
         labelColor,

@@ -44,10 +44,6 @@ class MyLocationMarker {
   static const double _badgeHeight = 18;
   static const double _badgeOverlap = 8;
   static const double _pillTailHeight = 10;
-  static const double _cloudDesignWidth = 68;
-  static const double _cloudDesignHeight = 49;
-  static const double _cloudDotDesignSize = 10;
-  static const double _cloudDotGapDesign = 1;
 
   bool get _hasLabel {
     final String? trimmed = label?.trim();
@@ -68,12 +64,7 @@ class MyLocationMarker {
               horizontalPadding: dialog.horizontalPadding,
               verticalPadding: dialog.verticalPadding,
             );
-      final double sx = body.width / _cloudDesignWidth;
-      final double sy = body.height / _cloudDesignHeight;
-      final double scale = sx < sy ? sx : sy;
-      return body.height +
-          _cloudDotGapDesign * scale +
-          _cloudDotDesignSize * scale;
+      return body.height + MarkerDialog.cloudDotGap + MarkerDialog.cloudDotSize;
     }
     return dialog.height + _pillTailHeight;
   }

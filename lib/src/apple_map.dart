@@ -321,8 +321,8 @@ class _AppleMapState extends State<AppleMap> {
     }
     try {
       await controller._updateMapOptions(updates);
-    } on PlatformException catch (e) {
-      if (e.code == 'disposed') {
+    } catch (e) {
+      if (_isDisposedChannelError(e)) {
         return;
       }
       rethrow;
@@ -341,8 +341,8 @@ class _AppleMapState extends State<AppleMap> {
     try {
       await controller._updateAnnotations(_AnnotationUpdates.from(
           _annotations.values.toSet(), widget.annotations));
-    } on PlatformException catch (e) {
-      if (e.code == 'disposed') {
+    } catch (e) {
+      if (_isDisposedChannelError(e)) {
         return;
       }
       rethrow;
@@ -361,8 +361,8 @@ class _AppleMapState extends State<AppleMap> {
     try {
       await controller._updatePolylines(
           _PolylineUpdates.from(_polylines.values.toSet(), widget.polylines));
-    } on PlatformException catch (e) {
-      if (e.code == 'disposed') {
+    } catch (e) {
+      if (_isDisposedChannelError(e)) {
         return;
       }
       rethrow;
@@ -381,8 +381,8 @@ class _AppleMapState extends State<AppleMap> {
     try {
       await controller._updatePolygons(
           _PolygonUpdates.from(_polygons.values.toSet(), widget.polygons));
-    } on PlatformException catch (e) {
-      if (e.code == 'disposed') {
+    } catch (e) {
+      if (_isDisposedChannelError(e)) {
         return;
       }
       rethrow;
@@ -401,8 +401,8 @@ class _AppleMapState extends State<AppleMap> {
     try {
       await controller._updateCircles(
           _CircleUpdates.from(_circles.values.toSet(), widget.circles));
-    } on PlatformException catch (e) {
-      if (e.code == 'disposed') {
+    } catch (e) {
+      if (_isDisposedChannelError(e)) {
         return;
       }
       rethrow;
@@ -411,6 +411,15 @@ class _AppleMapState extends State<AppleMap> {
       return;
     }
     _circles = _keyByCircleId(widget.circles);
+  }
+
+  /// Native cleared the method channel (premature dispose / view teardown)
+  /// while this State is still mounted.
+  static bool _isDisposedChannelError(Object error) {
+    if (error is MissingPluginException) {
+      return true;
+    }
+    return error is PlatformException && error.code == 'disposed';
   }
 
   Future<void> onPlatformViewCreated(int id) async {

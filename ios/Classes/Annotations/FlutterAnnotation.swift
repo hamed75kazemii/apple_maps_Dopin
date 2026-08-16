@@ -51,6 +51,10 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     var dopinBorderColor: UIColor = .white
     /// `nil` = draw as circle on native side.
     var dopinBorderRadius: CGFloat?
+    /// When true, draw a Liquid Glass ring instead of a solid border fill.
+    var dopinLiquidGlassBorder: Bool = false
+    /// Center emoji glyph (skips image content when non-empty).
+    var dopinEmoji: String?
     var dopinLabelFontSize: CGFloat = 10
     var dopinBadgeHeight: CGFloat = 18
     var dopinLabelColor: UIColor = UIColor(red: 123/255, green: 44/255, blue: 191/255, alpha: 1)
@@ -117,7 +121,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
         let asset = dopinImageAssetName ?? ""
         let radius = dopinBorderRadius.map { "\($0)" } ?? "circle"
         let urls = dopinImageUrls.joined(separator: ",")
-        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)|\(dopinLabelBackgroundColor)|\(dopinLabelGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(dopinLabelBackgroundGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(markerDialogSignature)"
+        return "\(urls)|\(pngLen)|\(asset)|\(dopinImageAssetScale)|\(dopinEmoji ?? "")|\(dopinMarkerLabel ?? "")|\(dopinMarkerCount.map { "\($0)" } ?? "")|\(dopinFrameWidth)|\(dopinFrameHeight)|\(dopinBorderWidth)|\(dopinBorderColor)|\(radius)|\(dopinLiquidGlassBorder)|\(dopinLabelFontSize)|\(dopinBadgeHeight)|\(dopinLabelColor)|\(dopinLabelBackgroundColor)|\(dopinLabelGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(dopinLabelBackgroundGradientColors?.map { $0.description }.joined(separator: ",") ?? "")|\(markerDialogSignature)"
     }
 
     var svgMarkerSignature: String {
@@ -281,6 +285,11 @@ class FlutterAnnotation: NSObject, MKAnnotation {
                 self.dopinBorderColor = Self.uiColorFromArgb(border.uint32Value)
             } else if let border = dopin["borderColor"] as? Int {
                 self.dopinBorderColor = Self.uiColorFromArgb(UInt32(border))
+            }
+            self.dopinLiquidGlassBorder = dopin["liquidGlassBorder"] as? Bool ?? false
+            if let emoji = dopin["emoji"] as? String {
+                // Keep empty string — distinguishes emoji-center pins from avatars.
+                self.dopinEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             if let lc = dopin["labelColor"] as? NSNumber {
                 self.dopinLabelColor = Self.uiColorFromArgb(lc.uint32Value)
@@ -496,7 +505,7 @@ class FlutterAnnotation: NSObject, MKAnnotation {
     }
 
     static func == (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {
-        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelBackgroundColor == rhs.dopinLabelBackgroundColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.dopinLabelBackgroundGradientColors == rhs.dopinLabelBackgroundGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature && lhs.markerDialogSignature == rhs.markerDialogSignature
+        return lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.image == rhs.image && lhs.alpha == rhs.alpha && lhs.isDraggable == rhs.isDraggable && lhs.wasDragged == rhs.wasDragged && lhs.isVisible == rhs.isVisible && lhs.icon == rhs.icon && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.infoWindowConsumesTapEvents == rhs.infoWindowConsumesTapEvents && lhs.anchor == rhs.anchor && lhs.calloutOffset == rhs.calloutOffset && lhs.coordinate.latitude == rhs.coordinate.latitude && lhs.coordinate.longitude == rhs.coordinate.longitude && lhs.zIndex == rhs.zIndex && lhs.glow == rhs.glow && lhs.glowColorArgb == rhs.glowColorArgb && lhs.glowIntensity == rhs.glowIntensity && lhs.glowAnchor == rhs.glowAnchor && lhs.markerShadowEnabled == rhs.markerShadowEnabled && lhs.markerShadowColor == rhs.markerShadowColor && lhs.markerShadowBlurRadius == rhs.markerShadowBlurRadius && lhs.markerShadowOffsetX == rhs.markerShadowOffsetX && lhs.markerShadowOffsetY == rhs.markerShadowOffsetY && lhs.usesDopinMarker == rhs.usesDopinMarker && lhs.dopinImageUrls == rhs.dopinImageUrls && lhs.dopinImagePngData == rhs.dopinImagePngData && lhs.dopinImageAssetName == rhs.dopinImageAssetName && lhs.dopinImageAssetScale == rhs.dopinImageAssetScale && lhs.dopinEmoji == rhs.dopinEmoji && lhs.dopinMarkerLabel == rhs.dopinMarkerLabel && lhs.dopinMarkerCount == rhs.dopinMarkerCount && lhs.dopinFrameWidth == rhs.dopinFrameWidth && lhs.dopinFrameHeight == rhs.dopinFrameHeight && lhs.dopinBorderWidth == rhs.dopinBorderWidth && lhs.dopinBorderColor == rhs.dopinBorderColor && lhs.dopinBorderRadius == rhs.dopinBorderRadius && lhs.dopinLiquidGlassBorder == rhs.dopinLiquidGlassBorder && lhs.dopinLabelFontSize == rhs.dopinLabelFontSize && lhs.dopinBadgeHeight == rhs.dopinBadgeHeight && lhs.dopinLabelColor == rhs.dopinLabelColor && lhs.dopinLabelBackgroundColor == rhs.dopinLabelBackgroundColor && lhs.dopinLabelGradientColors == rhs.dopinLabelGradientColors && lhs.dopinLabelBackgroundGradientColors == rhs.dopinLabelBackgroundGradientColors && lhs.usesSvgMarker == rhs.usesSvgMarker && lhs.svgWidth == rhs.svgWidth && lhs.svgHeight == rhs.svgHeight && lhs.svgImageUrl == rhs.svgImageUrl && lhs.svgImagePngData == rhs.svgImagePngData && lhs.svgEmoji == rhs.svgEmoji && lhs.usesCardMarker == rhs.usesCardMarker && lhs.cardMarkerSignature == rhs.cardMarkerSignature && lhs.markerDialogSignature == rhs.markerDialogSignature
     }
 
     static func != (lhs: FlutterAnnotation, rhs: FlutterAnnotation) -> Bool {

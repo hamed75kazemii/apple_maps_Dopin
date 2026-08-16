@@ -38,8 +38,6 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
 
     /// Fired when the map leaves a window (e.g. Flutter page pop) so the
     /// owning controller can tear down display links and the channel handler.
-    var onRemovedFromWindow: (() -> Void)?
-
     var lastUserCoordinate: CLLocationCoordinate2D?
     
     fileprivate let locationManager: CLLocationManager = CLLocationManager()
@@ -76,8 +74,16 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
 
     private var isAutoGlobeActive: Bool = false
 
-    private static let globeZoomThreshold: Double = 2.5
-    private static let standardZoomThreshold: Double = 3.5
+    /// Frozen frame overlaid during the auto-globe style crossfade.
+    private var globeTransitionSnapshot: UIView? = nil
+
+    // The flat world stops filling a tall phone viewport near zoom 3.5 and
+    // blank void bands appear around the map. Enter the globe a full level
+    // earlier: fast pinches advance ~1 zoom level between gesture ticks, and
+    // the crossfade must always freeze a full-bleed frame, never the void.
+    // Exit above entry for hysteresis.
+    private static let globeZoomThreshold: Double = 4.2
+    private static let standardZoomThreshold: Double = 5.0
     private static let standardMapTypeIndex: Int = 0
     private static let hybridFlyoverMapTypeIndex: Int = 4
     private static let mutedStandardMapTypeIndex: Int = 5
@@ -110,6 +116,7 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
 
     /// Enables or disables native selection for Apple Maps built-in POIs on iOS 17+.
     /// On older versions this is silently a no-op.
+    /// Does not dismiss an already-selected POI callout — call hidePOIDetail for that.
     func applyPOITapInteraction(enabled: Bool) {
         self.isPOITapEnabled = enabled
         if #available(iOS 17.0, *) {
@@ -122,6 +129,11 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         for annotation in self.selectedAnnotations {
             self.deselectAnnotation(annotation, animated: animated)
         }
+    }
+
+    /// Hides the native POI detail/callout for the currently selected MapKit feature.
+    func hidePOIDetail(animated: Bool = false) {
+        self.clearSelection(animated: animated)
     }
     
     var actualHeading: CLLocationDirection {
@@ -170,13 +182,6 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
     override func didMoveToSuperview() {
         if oldBounds != CGRect.zero {
             oldBounds = CGRect.zero
-        }
-    }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        if window == nil {
-            onRemovedFromWindow?()
         }
     }
 
@@ -647,24 +652,50 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
 
         if zoom <= FlutterMapView.globeZoomThreshold && !isAutoGlobeActive {
             isAutoGlobeActive = true
-            applyMapType(index: FlutterMapView.hybridFlyoverMapTypeIndex)
-            if zoom <= 2 {
-                refreshGlobeProjection()
-            }
+            crossfadeMapType(to: FlutterMapView.hybridFlyoverMapTypeIndex)
         } else if zoom >= FlutterMapView.standardZoomThreshold && isAutoGlobeActive {
             isAutoGlobeActive = false
-            applyMapType(index: FlutterMapView.standardMapTypeIndex)
+            crossfadeMapType(to: FlutterMapView.standardMapTypeIndex)
         }
     }
 
-    private func refreshGlobeProjection() {
-        if #available(iOS 9.0, *) {
-            setCenterCoordinateWithAltitude(
-                centerCoordinate: centerCoordinate,
-                zoomLevel: calculatedZoomLevel,
-                animated: false
-            )
+    /// Swaps the map configuration beneath a frozen snapshot of the current
+    /// frame, then dissolves the snapshot, so the auto-globe transition reads
+    /// as a crossfade instead of a one-frame tile swap. Deliberately performs
+    /// no region re-set: a programmatic camera change mid-pinch snaps the
+    /// gesture (the old refreshGlobeProjection jump).
+    private func crossfadeMapType(to index: Int) {
+        globeTransitionSnapshot?.removeFromSuperview()
+        globeTransitionSnapshot = nil
+
+        guard let snapshot = self.snapshotView(afterScreenUpdates: false) else {
+            applyMapType(index: index)
+            return
         }
+        snapshot.frame = bounds
+        snapshot.isUserInteractionEnabled = false
+        snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(snapshot)
+        globeTransitionSnapshot = snapshot
+
+        applyMapType(index: index)
+
+        // The delay holds the frozen frame while the new configuration
+        // renders its first tiles beneath; then the old style dissolves.
+        // Kept short: during an active pinch the live map keeps zooming
+        // under the frozen frame, so a long hold reads as a stall.
+        UIView.animate(
+            withDuration: 0.35,
+            delay: 0.1,
+            options: [.curveEaseInOut, .beginFromCurrentState],
+            animations: { snapshot.alpha = 0 },
+            completion: { [weak self] _ in
+                snapshot.removeFromSuperview()
+                if self?.globeTransitionSnapshot === snapshot {
+                    self?.globeTransitionSnapshot = nil
+                }
+            }
+        )
     }
 
     @objc func longTap(sender: UIGestureRecognizer){

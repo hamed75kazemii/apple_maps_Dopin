@@ -519,6 +519,8 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.dopinBorderWidth = annotation.dopinBorderWidth
                 oldAnnotation.dopinBorderColor = annotation.dopinBorderColor
                 oldAnnotation.dopinBorderRadius = annotation.dopinBorderRadius
+                oldAnnotation.dopinLiquidGlassBorder = annotation.dopinLiquidGlassBorder
+                oldAnnotation.dopinEmoji = annotation.dopinEmoji
                 oldAnnotation.dopinLabelFontSize = annotation.dopinLabelFontSize
                 oldAnnotation.dopinBadgeHeight = annotation.dopinBadgeHeight
                 oldAnnotation.dopinLabelColor = annotation.dopinLabelColor
